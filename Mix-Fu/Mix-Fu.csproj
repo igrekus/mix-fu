@@ -89,6 +89,12 @@
     <Reference Include="Ag90x0_SA_A_08_03">
       <HintPath>..\..\..\PLUGINS\Agilent\Ag90x0_SA_A_08_03.dll</HintPath>
     </Reference>
+    <Reference Include="Agilent.CommandExpert.DataModel, Version=1.4.944.0, Culture=neutral, PublicKeyToken=b51aac182336bfb6">
+      <HintPath>..\..\Mix-Fu_2016_09_23\Mix-Fu\bin\Debug\Agilent.CommandExpert.DataModel.dll</HintPath>
+    </Reference>
+    <Reference Include="Agilent.CommandExpert.InstrumentAbstraction, Version=1.4.944.0, Culture=neutral, PublicKeyToken=c5e9dbe29758600c">
+      <HintPath>..\..\Mix-Fu_2016_09_23\Mix-Fu\bin\Debug\Agilent.CommandExpert.InstrumentAbstraction.dll</HintPath>
+    </Reference>
     <Reference Include="AgMXG_A_01_80">
       <HintPath>..\..\..\PLUGINS\Agilent\AgMXG_A_01_80.dll</HintPath>
     </Reference>

@@ -26,11 +26,11 @@
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="30"/>
-            <RowDefinition Height="209.6"/>
+            <RowDefinition Height="234"/>
             <RowDefinition/>
         </Grid.RowDefinitions>
-        <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="79" Margin="128.6,130.6,0,0" VerticalAlignment="Top" Width="258" Grid.Row="1" Grid.ColumnSpan="3" Grid.Column="2"/>
-        <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="79" Margin="0,130.6,0,0" VerticalAlignment="Top" Width="339" Grid.Row="1" Grid.ColumnSpan="3"/>
+        <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="101" Margin="129,130,0,0" VerticalAlignment="Top" Width="256" Grid.Row="1" Grid.ColumnSpan="3" Grid.Column="2"/>
+        <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="101" Margin="1,130,0,0" VerticalAlignment="Top" Width="339" Grid.Row="1" Grid.ColumnSpan="3"/>
         <Border BorderBrush="Black" BorderThickness="1" Grid.Column="3" HorizontalAlignment="Left" Height="161" Margin="129,0,0,0" Grid.RowSpan="2" VerticalAlignment="Top" Width="128" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2">
             <Border.RenderTransform>
                 <TransformGroup>
@@ -41,7 +41,7 @@
                 </TransformGroup>
             </Border.RenderTransform>
         </Border>
-        <Border BorderBrush="Black" BorderThickness="1" Grid.Column="2" HorizontalAlignment="Left" Height="161" Margin="128.6,0,0,0" Grid.RowSpan="2" VerticalAlignment="Top" Width="130" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2">
+        <Border BorderBrush="Black" BorderThickness="1" Grid.Column="2" HorizontalAlignment="Left" Height="161" Margin="129,0,0,0" Grid.RowSpan="2" VerticalAlignment="Top" Width="130" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2">
             <Border.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform/>
@@ -51,7 +51,7 @@
                 </TransformGroup>
             </Border.RenderTransform>
         </Border>
-        <Border BorderBrush="Black" BorderThickness="1" Grid.Column="1" HorizontalAlignment="Left" Height="161" Margin="99.6,0,0,0" Grid.RowSpan="2" VerticalAlignment="Top" Width="130" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2">
+        <Border BorderBrush="Black" BorderThickness="1" Grid.Column="2" HorizontalAlignment="Left" Height="161" Grid.RowSpan="2" VerticalAlignment="Top" Width="130" RenderTransformOrigin="0.5,0.5">
             <Border.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform/>
@@ -62,22 +62,22 @@
             </Border.RenderTransform>
         </Border>
         <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="161" Grid.RowSpan="2" VerticalAlignment="Top" Width="110"/>
-        <Border BorderBrush="Black" BorderThickness="1" Grid.ColumnSpan="2" HorizontalAlignment="Left" Height="161" Margin="110,0,0,0" VerticalAlignment="Top" Width="100" Grid.RowSpan="2"/>
-        <DataGrid x:Name="dataGrid" Grid.ColumnSpan="6" RenderTransformOrigin="0.5,0.5" Margin="-1,1,0.4,0.4" Grid.Row="2"/>
-        <ListBox x:Name="listBox" HorizontalAlignment="Left" Height="127" VerticalAlignment="Top" Width="107" SelectionChanged="listBox_SelectionChanged" Margin="2,1.6,0,0" Grid.Row="1">
+        <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="161" VerticalAlignment="Top" Width="100" Grid.RowSpan="2" Grid.Column="1"/>
+        <DataGrid x:Name="dataGrid" Grid.ColumnSpan="7" RenderTransformOrigin="0.5,0.5" Margin="2,57,0,0" Grid.Row="2"/>
+        <ListBox x:Name="listBox" HorizontalAlignment="Left" Height="127" VerticalAlignment="Top" Width="107" SelectionChanged="listBox_SelectionChanged" Margin="2,2,0,0" Grid.Row="1">
             <ListBoxItem Content="DSB down mixer"/>
             <ListBoxItem Content="DSB up mixer"/>
             <ListBoxItem Content="SSB down mixer"/>
             <ListBoxItem Content="SSB up mixer"/>
             <ListBoxItem Content="Multiplier x2"/>
         </ListBox>
-        <ComboBox x:Name="comboBox_instruments_LO" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="32" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="0" Margin="34.6,62.6,0,0" Grid.Column="2" Grid.Row="1"/>
-        <ComboBox x:Name="comboBox_instruments_RF" HorizontalAlignment="Left" Width="93" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="2" Padding="0" Height="31" VerticalAlignment="Top" Margin="34.6,0.6,0,0" Grid.Row="1"/>
-        <ComboBox x:Name="comboBox_instruments_IF" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="29" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="2" Padding="0" Margin="34.6,32.6,0,0" Grid.Row="1"/>
-        <Button x:Name="run_quiery" Content="quiery" Margin="98.6,184.6,2,0" VerticalAlignment="Top" Click="run_quiery_Click" Grid.Column="1" Height="23" HorizontalContentAlignment="Center" Padding="0,0,0,2" Grid.Row="1" Grid.ColumnSpan="2"/>
-        <Button x:Name="run_command" Content="command" Margin="98.6,159.6,2,0" Click="run_command_Click" Grid.Column="1" HorizontalContentAlignment="Center" Padding="0,0,0,2" Height="24" VerticalAlignment="Top" Grid.Row="1" Grid.ColumnSpan="2"/>
-        <Button x:Name="b_search" Content="search" RenderTransformOrigin="0.5,0.5" Click="b_search_clk" BorderBrush="#FF707070" BorderThickness="1" Background="#FFD4B7B7" ForceCursor="True" Padding="0" Margin="1.6,63.6,2.4,0" Grid.Row="1" Grid.Column="1" Height="64" VerticalAlignment="Top"/>
-        <Button x:Name="b_cal_IN" Content="calibrate IN" HorizontalContentAlignment="Center" Padding="0,-1,0,0" FontSize="10.667" FontWeight="Bold" Grid.Column="3" Click="b_cal_IN_run" Margin="1,0.6,2.6,0" Height="31" VerticalAlignment="Top" Grid.Row="1">
+        <ComboBox x:Name="comboLO" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="32" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="0" Margin="35,64,0,0" Grid.Column="2" Grid.Row="1"/>
+        <ComboBox x:Name="comboIN" HorizontalAlignment="Left" Width="93" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="2" Padding="0" Height="31" VerticalAlignment="Top" Margin="35,2,0,0" Grid.Row="1"/>
+        <ComboBox x:Name="combOUT" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="29" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="2" Padding="0" Margin="35,34,0,0" Grid.Row="1"/>
+        <Button x:Name="btnRunQuery" Content="query" Margin="99,185,2,0" VerticalAlignment="Top" Click="btnRunQueryClicked" Grid.Column="1" Height="23" HorizontalContentAlignment="Center" Padding="0,0,0,2" Grid.Row="1" Grid.ColumnSpan="2"/>
+        <Button x:Name="btnRunCommand" Content="command" Margin="99,160,2,0" Click="btnRunCommandClicked" Grid.Column="1" HorizontalContentAlignment="Center" Padding="0,0,0,2" Height="24" VerticalAlignment="Top" Grid.Row="1" Grid.ColumnSpan="2"/>
+        <Button x:Name="btnSearch" Content="search" RenderTransformOrigin="0.5,0.5" Click="btnSearchClicked" BorderBrush="#FF707070" BorderThickness="1" Background="#FFD4B7B7" ForceCursor="True" Padding="0" Margin="2,65,2,0" Grid.Row="1" Grid.Column="1" Height="64" VerticalAlignment="Top"/>
+        <Button x:Name="btnCalibrateIn" Content="calibrate IN" HorizontalContentAlignment="Center" Padding="0,-1,0,0" FontSize="10.667" FontWeight="Bold" Grid.Column="3" Click="btnCalibrateInClicked" Margin="1,2,3,0" Height="31" VerticalAlignment="Top" Grid.Row="1">
             <Button.Background>
                 <LinearGradientBrush EndPoint="0,1" StartPoint="0,0">
                     <GradientStop Color="#FFF3F3F3" Offset="0"/>
@@ -87,7 +87,7 @@
                 </LinearGradientBrush>
             </Button.Background>
         </Button>
-        <Button x:Name="b_cal_LO" Content="calibrate LO" Margin="1,62.6,0,0" VerticalAlignment="Top" Height="32" HorizontalContentAlignment="Center" Padding="0,-1,0,0" FontSize="10.667" FontWeight="Bold" Click="b_cal_LO_run" Grid.Column="3" HorizontalAlignment="Left" Width="126" Grid.Row="1">
+        <Button x:Name="btnCalibrateLo" Content="calibrate LO" Margin="1,64,0,0" VerticalAlignment="Top" Height="32" HorizontalContentAlignment="Center" Padding="0,-1,0,0" FontSize="10.667" FontWeight="Bold" Click="btnCalibrateLoClicked" Grid.Column="3" HorizontalAlignment="Left" Width="126" Grid.Row="1">
             <Button.Background>
                 <LinearGradientBrush EndPoint="0,1" StartPoint="0,0">
                     <GradientStop Color="#FFF3F3F3" Offset="0"/>
@@ -97,7 +97,7 @@
                 </LinearGradientBrush>
             </Button.Background>
         </Button>
-        <Button x:Name="b_cal_OUT" Content="calibrate OUT" Margin="1,32.6,0,0" HorizontalContentAlignment="Center" Padding="0,-1,0,0" FontSize="10.667" FontWeight="Bold" Grid.Column="3" Click="b_cal_OUT_run" Height="29" VerticalAlignment="Top" HorizontalAlignment="Left" Width="126" Grid.Row="1">
+        <Button x:Name="btnCalibrateOut" Content="calibrate OUT" Margin="1,34,0,0" HorizontalContentAlignment="Center" Padding="0,-1,0,0" FontSize="10.667" FontWeight="Bold" Grid.Column="3" Click="btnCalibrateOutClicked" Height="29" VerticalAlignment="Top" HorizontalAlignment="Left" Width="126" Grid.Row="1">
             <Button.Background>
                 <LinearGradientBrush EndPoint="0,1" StartPoint="0,0">
                     <GradientStop Color="#FFF3F3F3" Offset="0"/>
@@ -107,33 +107,35 @@
                 </LinearGradientBrush>
             </Button.Background>
         </Button>
-        <Button x:Name="b_import_xlsx" Content="import xlsx" Grid.Column="2" VerticalAlignment="Top" Click="b_import_xlsx_Clk" Height="32" Margin="0.6,95.6,3,0" Grid.Row="1"/>
-        <Button x:Name="b_save_xlsx" Content="save xlsx" Grid.Column="3" Margin="1,95.6,2.6,0" VerticalAlignment="Top" Click="b_save_xlsx_clk" Height="32" Grid.Row="1"/>
-        <Button x:Name="b_Measure_Mix_DSB_down" Content="DSB mix down" RenderTransformOrigin="0.5,0.5" Click="b_measure_clk" BorderBrush="#FF707070" BorderThickness="1" Background="#FFB7C9D4" ForceCursor="True" Grid.Column="4" Padding="0" Height="31" VerticalAlignment="Top" FontWeight="Bold" HorizontalAlignment="Left" Width="125" Margin="0.4,0.6,0,0" Grid.Row="1"/>
-        <Button x:Name="b_Measure_Mix_SSB_down" Content="SSB mix down" RenderTransformOrigin="0.5,0.5" Click="b_measure_mix_SSB_down_clk" BorderBrush="#FF707070" BorderThickness="1" Background="#FFB7C9D4" ForceCursor="True" Grid.Column="4" Padding="0" Height="29" VerticalAlignment="Top" FontWeight="Bold" Margin="0.4,32.6,0,0" HorizontalAlignment="Left" Width="125" Grid.Row="1"/>
-        <Button x:Name="b_Measure_Mix_SSB_up" Content="SSB mix up" RenderTransformOrigin="0.5,0.5" Click="b_measure_mix_SSB_up_clk" BorderBrush="#FF707070" BorderThickness="1" Background="#FFB7C9D4" ForceCursor="True" Grid.Column="4" Padding="0" Height="32" VerticalAlignment="Top" FontWeight="Bold" Margin="0.4,62.6,0,0" HorizontalAlignment="Left" Width="125" Grid.Row="1"/>
-        <Button x:Name="b_Measure_Mult" Content="mult 4 harm" RenderTransformOrigin="0.5,0.5" Click="b_measure_mult_clk" BorderBrush="#FF707070" BorderThickness="1" Background="#FFB7C9D4" ForceCursor="True" Grid.Column="4" Padding="0" FontWeight="Bold" Margin="0.4,95.6,0,0" Height="32" VerticalAlignment="Top" HorizontalAlignment="Left" Width="125" Grid.Row="1"/>
-        <Button x:Name="b_Measure" Content="Measure" RenderTransformOrigin="0.5,0.5" Click="b_measure_clk" BorderBrush="#FF707070" BorderThickness="1" Background="#FFB7C9D4" ForceCursor="True" Grid.Column="4" Padding="0" Height="75" VerticalAlignment="Top" FontWeight="Bold" HorizontalAlignment="Right" Width="76" Margin="0,132.6,7.6,0" Grid.Row="1"/>
-        <TextBox x:Name="textBox_number" Grid.Column="1" Height="23" TextWrapping="Wrap" Text="20" VerticalAlignment="Top" FontWeight="Bold" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" Margin="0,34.6,10.4,0" HorizontalAlignment="Right" Width="25" Grid.Row="1"/>
-        <TextBox x:Name="textBox_number_GPIB" Grid.Column="1" TextWrapping="Wrap" Text="0" FontWeight="Bold" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" Margin="0,34.6,70.4,0" Height="23" VerticalAlignment="Top" HorizontalAlignment="Right" Width="25" Grid.Row="1"/>
-        <TextBox x:Name="textBox_delay" Grid.Column="4" HorizontalAlignment="Left" TextWrapping="Wrap" Text="300" Width="48" FontWeight="Bold" HorizontalContentAlignment="Left" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" TextChanged="textBox_delay_TextChanged" Height="27" VerticalAlignment="Top" Margin="0.4,131.6,0,0" Grid.Row="1"/>
-        <TextBox x:Name="textBox_quiery" TextWrapping="Wrap" Text="*IDN?" FontWeight="Bold" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="Black" Margin="0,159.6,2.4,0" Grid.ColumnSpan="2" RenderTransformOrigin="0.5,0.5" HorizontalContentAlignment="Stretch" HorizontalAlignment="Right" Width="206" Grid.Row="1" Height="24" VerticalAlignment="Top"/>
-        <TextBox x:Name="textBox_answer" TextWrapping="Wrap" FontWeight="Bold" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="Black" Margin="0,184.6,2.4,0" Grid.ColumnSpan="2" HorizontalContentAlignment="Stretch" Height="23" VerticalAlignment="Top" Grid.Row="1" HorizontalAlignment="Right" Width="206"/>
-        <TextBox x:Name="textBox_maxfreq" Grid.Column="4" TextWrapping="Wrap" Text="26500" FontWeight="Bold" HorizontalContentAlignment="Left" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" Margin="0.4,158.6,0,0" TextChanged="textBox_maxfreq_TextChanged" Height="25" VerticalAlignment="Top" HorizontalAlignment="Left" Width="48" Grid.Row="1"/>
-        <TextBox x:Name="textBox_attenuation" Grid.Column="4" Height="24" TextWrapping="Wrap" Text="30" VerticalAlignment="Top" FontWeight="Bold" HorizontalContentAlignment="Left" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" Margin="0.4,183.6,0,0" TextChanged="textBox_attenuation_TextChanged" HorizontalAlignment="Left" Width="47" Grid.Row="1"/>
-        <Label x:Name="label_LO" Content="LO" HorizontalAlignment="Left" VerticalAlignment="Top" Height="32" Width="35" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="1" Margin="99.6,63.6,0,0" RenderTransformOrigin="-0.317,0.402" Grid.ColumnSpan="2" Grid.Row="1"/>
-        <Label x:Name="label_IN" Content="IN" HorizontalAlignment="Left" VerticalAlignment="Top" Height="31" Width="35" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="1" RenderTransformOrigin="1.53,1.983" Grid.ColumnSpan="2" Margin="99.6,1.6,0,0" Grid.Row="1"/>
-        <Label x:Name="label_OUT" Content="OUT" HorizontalAlignment="Left" VerticalAlignment="Top" Height="32" Width="35" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="1" Margin="99.6,30.6,0,0" Grid.ColumnSpan="2" Grid.Row="1"/>
-        <Label x:Name="label_ports" Content="Port range:" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Margin="110,1.6,0.4,0" Grid.ColumnSpan="2" Height="34" VerticalAlignment="Top" Grid.Row="1"/>
-        <Label x:Name="label_dash" Content="-" HorizontalAlignment="Right" Width="20" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="1" Margin="0,32.6,42.4,0" Height="24" VerticalAlignment="Top" Grid.Row="1"/>
-        <Label x:Name="label_delay" Content="Delay, ms:" HorizontalContentAlignment="Right" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="3" Height="27" VerticalAlignment="Top" Margin="1,131.6,0.6,0" Grid.Row="1"/>
-        <Label x:Name="label_maxfreq" Content="Max Freq, MHz" VerticalAlignment="Top" Height="25" HorizontalContentAlignment="Right" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="3" Margin="1,158.6,0.6,0" RenderTransformOrigin="0.5,0.5" Grid.Row="1"/>
-        <Label x:Name="label_attenuation" Content="Attenuation, dB" VerticalAlignment="Top" Height="24" HorizontalContentAlignment="Right" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="3" Margin="1,183.6,0.6,0" Grid.Row="1"/>
-        <Label x:Name="label_measurement_type" Content="Measure type" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="1,2,2.4,0" Grid.RowSpan="2"/>
-        <Label x:Name="label_device_search" Content="Devices search" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="1.6,2,2.4,0" Grid.Column="1" Grid.RowSpan="2"/>
-        <Label x:Name="label_device_choice" Content="Devices choice" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="0.6,2,2,0" Grid.Column="2" Grid.RowSpan="2"/>
-        <Label x:Name="label_device_calibation" Content="Calibration" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="1,2,2.6,0" Grid.Column="3" Grid.RowSpan="2"/>
-        <Label x:Name="label_device_measure" Content="Measure" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="31" VerticalAlignment="Top" Margin="0.4,2,6.6,0" Grid.Column="4" Grid.RowSpan="2"/>
-        <Label x:Name="label_device_control" Content="Devices manual control" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="25" VerticalAlignment="Top" Margin="3,131.6,2,0" Grid.ColumnSpan="3" Grid.Row="1"/>
+        <Button x:Name="btnImportXlsx" Content="import xlsx" Grid.Column="2" VerticalAlignment="Top" Click="btnImportXlsxClicked" Height="32" Margin="2,97,2,0" Grid.Row="1"/>
+        <Button x:Name="btnSaveXlsx" Content="save xlsx" Grid.Column="3" Margin="1,97,3,0" VerticalAlignment="Top" Click="btnSaveXlsxClicked" Height="32" Grid.Row="1"/>
+        <Button x:Name="btnMeasure" Content="Measure" RenderTransformOrigin="0.5,0.5" Click="btnMeasureClicked" BorderBrush="#FF707070" BorderThickness="1" Background="#FFB7C9D4" ForceCursor="True" Grid.Column="4" Padding="0" FontWeight="Bold" Margin="1,2,7,0" Grid.Row="1" Height="127" VerticalAlignment="Top"/>
+        <TextBox x:Name="textBox_number_maxport" Grid.Column="1" Height="23" TextWrapping="Wrap" Text="20" VerticalAlignment="Top" FontWeight="Bold" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" Margin="0,35,10,0" HorizontalAlignment="Right" Width="25" Grid.Row="1"/>
+        <TextBox x:Name="textBox_number_GPIB" Grid.Column="1" TextWrapping="Wrap" Text="0" FontWeight="Bold" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" Margin="0,35,70,0" Height="23" VerticalAlignment="Top" HorizontalAlignment="Right" Width="25" Grid.Row="1"/>
+        <TextBox x:Name="textBox_delay" Grid.Column="4" HorizontalAlignment="Left" TextWrapping="Wrap" Text="300" Width="48" FontWeight="Bold" HorizontalContentAlignment="Left" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" TextChanged="textBox_delay_TextChanged" Height="27" VerticalAlignment="Top" Margin="0,131,0,0" Grid.Row="1"/>
+        <TextBox x:Name="textBox_span" Grid.Column="4" TextWrapping="Wrap" Text="10" FontWeight="Bold" HorizontalContentAlignment="Left" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" TextChanged="textBox_span_TextChanged" HorizontalAlignment="Left" Width="48" Grid.Row="1" Margin="0,158,0,0" Height="24" VerticalAlignment="Top"/>
+        <TextBox x:Name="textBox_query" TextWrapping="Wrap" Text="*IDN?" FontWeight="Bold" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="Black" Margin="0,160,2,0" Grid.ColumnSpan="2" RenderTransformOrigin="0.5,0.5" HorizontalContentAlignment="Stretch" HorizontalAlignment="Right" Width="206" Grid.Row="1" Height="24" VerticalAlignment="Top"/>
+        <TextBox x:Name="textBox_answer" TextWrapping="Wrap" FontWeight="Bold" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="Black" Margin="0,185,2,0" Grid.ColumnSpan="2" HorizontalContentAlignment="Stretch" Height="23" VerticalAlignment="Top" Grid.Row="1" HorizontalAlignment="Right" Width="206"/>
+        <TextBox x:Name="textBox_maxfreq" Grid.Column="4" TextWrapping="Wrap" Text="26500" FontWeight="Bold" HorizontalContentAlignment="Left" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" Margin="0,182,0,0" TextChanged="textBox_maxfreq_TextChanged" Height="24" VerticalAlignment="Top" HorizontalAlignment="Left" Width="48" Grid.Row="1"/>
+        <TextBox x:Name="textBox_attenuation" Grid.Column="4" Height="24" TextWrapping="Wrap" Text="30" VerticalAlignment="Top" FontWeight="Bold" HorizontalContentAlignment="Left" VerticalContentAlignment="Center" BorderThickness="1" BorderBrush="{x:Null}" Margin="0,206,0,0" TextChanged="textBox_attenuation_TextChanged" HorizontalAlignment="Left" Width="47" Grid.Row="1"/>
+        <Label x:Name="label_LO" Content="LO" HorizontalAlignment="Left" VerticalAlignment="Top" Height="32" Width="35" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="2" Margin="0,64,0,0" RenderTransformOrigin="-0.317,0.402" Grid.Row="1"/>
+        <Label x:Name="label_IN" Content="IN" HorizontalAlignment="Left" VerticalAlignment="Top" Height="31" Width="35" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="2" RenderTransformOrigin="1.53,1.983" Margin="0,2,0,0" Grid.Row="1"/>
+        <Label x:Name="label_OUT" Content="OUT" HorizontalAlignment="Left" VerticalAlignment="Top" Height="29" Width="35" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="2" Margin="0,34,0,0" Grid.Row="1"/>
+        <Label x:Name="label_ports" Content="Port range:" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Margin="0,2,0,0" Height="34" VerticalAlignment="Top" Grid.Row="1" Grid.Column="1"/>
+        <Label x:Name="label_dash" Content="-" HorizontalAlignment="Right" Width="20" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="1" Margin="0,33,42,0" Height="24" VerticalAlignment="Top" Grid.Row="1"/>
+        <Label x:Name="label_delay" Content="Delay, ms:" HorizontalContentAlignment="Right" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="3" Height="27" VerticalAlignment="Top" Margin="1,131,1,0" Grid.Row="1"/>
+        <Label x:Name="label_span" Content="Span, MHz" HorizontalContentAlignment="Right" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="3" Margin="1,158,1,52" RenderTransformOrigin="0.5,0.5" Grid.Row="1"/>
+        <Label x:Name="label_maxfreq" Content="Max Freq, MHz" VerticalAlignment="Top" Height="24" HorizontalContentAlignment="Right" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="3" Margin="1,182,1,0" RenderTransformOrigin="0.5,0.5" Grid.Row="1"/>
+        <Label x:Name="label_attenuation" Content="Attenuation, dB" VerticalAlignment="Top" Height="24" HorizontalContentAlignment="Right" VerticalContentAlignment="Center" FontWeight="Bold" Grid.Column="3" Margin="1,206,1,0" Grid.Row="1"/>
+        <Label x:Name="label_measurement_type" Content="Measure type" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="1,2,2,0" Grid.RowSpan="2"/>
+        <Label x:Name="label_device_search" Content="Device search" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="2,2,2,0" Grid.Column="1" Grid.RowSpan="2"/>
+        <Label x:Name="label_device_choice" Content="Device select" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="1,2,2,0" Grid.Column="2" Grid.RowSpan="2"/>
+        <Label x:Name="label_device_calibation" Content="Calibration" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="1,2,3,0" Grid.Column="3" Grid.RowSpan="2"/>
+        <Label x:Name="label_device_measure" Content="Measure" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="31" VerticalAlignment="Top" Margin="0,2,7,0" Grid.Column="4" Grid.RowSpan="2"/>
+        <Label x:Name="label_device_control" Content="Device manual control" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="25" VerticalAlignment="Top" Margin="3,132,2,0" Grid.ColumnSpan="3" Grid.Row="1"/>
+        <ScrollViewer x:Name="scrollviewer" Grid.Row="2" Grid.ColumnSpan="7" MinHeight="50" Margin="2,2,0.333,0" Height="50" VerticalAlignment="Top">
+            <TextBlock x:Name="board" TextWrapping="Wrap" FontSize="9.333" TextDecorations="{x:Null}" Margin="2" Text="ready"/>
+        </ScrollViewer>
+        <CheckBox x:Name="LogVerbose" Content="developer mode" HorizontalAlignment="Left" Margin="5,210,0,0" Grid.Row="1" VerticalAlignment="Top" Grid.ColumnSpan="2" Width="203"/>
     </Grid>
 </Window>
