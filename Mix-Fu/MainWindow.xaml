@@ -63,7 +63,7 @@
         </Border>
         <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="161" Grid.RowSpan="2" VerticalAlignment="Top" Width="110"/>
         <Border BorderBrush="Black" BorderThickness="1" HorizontalAlignment="Left" Height="161" VerticalAlignment="Top" Width="100" Grid.RowSpan="2" Grid.Column="1"/>
-        <DataGrid x:Name="dataGrid" Grid.ColumnSpan="7" RenderTransformOrigin="0.5,0.5" Margin="2,57,0,0" Grid.Row="2"/>
+        <DataGrid x:Name="dataGrid" Grid.ColumnSpan="7" RenderTransformOrigin="0.5,0.5" Margin="0,79,0,0" Grid.Row="2"/>
         <ListBox x:Name="listBox" HorizontalAlignment="Left" Height="127" VerticalAlignment="Top" Width="107" SelectionChanged="listBox_SelectionChanged" Margin="2,2,0,0" Grid.Row="1">
             <ListBoxItem Content="DSB down mixer"/>
             <ListBoxItem Content="DSB up mixer"/>
@@ -71,9 +71,9 @@
             <ListBoxItem Content="SSB up mixer"/>
             <ListBoxItem Content="Multiplier x2"/>
         </ListBox>
-        <ComboBox x:Name="comboLO" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="32" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="0" Margin="35,64,0,0" Grid.Column="2" Grid.Row="1"/>
-        <ComboBox x:Name="comboIN" HorizontalAlignment="Left" Width="93" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="2" Padding="0" Height="31" VerticalAlignment="Top" Margin="35,2,0,0" Grid.Row="1"/>
-        <ComboBox x:Name="comboOUT" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="29" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="2" Padding="0" Margin="35,34,0,0" Grid.Row="1"/>
+        <ComboBox x:Name="comboLO" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="32" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="0" Margin="35,64,0,0" Grid.Column="2" Grid.Row="1" SelectionChanged="comboLO_SelectionChanged"/>
+        <ComboBox x:Name="comboIN" HorizontalAlignment="Left" Width="93" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="2" Padding="0" Height="31" VerticalAlignment="Top" Margin="35,2,0,0" Grid.Row="1" SelectionChanged="comboIN_SelectionChanged"/>
+        <ComboBox x:Name="comboOUT" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="29" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="2" Padding="0" Margin="35,34,0,0" Grid.Row="1" SelectionChanged="comboOUT_SelectionChanged"/>
         <Button x:Name="btnRunQuery" Content="query" Margin="99,185,2,0" VerticalAlignment="Top" Click="btnRunQueryClicked" Grid.Column="1" Height="23" HorizontalContentAlignment="Center" Padding="0,0,0,2" Grid.Row="1" Grid.ColumnSpan="2"/>
         <Button x:Name="btnRunCommand" Content="command" Margin="99,160,2,0" Click="btnRunCommandClicked" Grid.Column="1" HorizontalContentAlignment="Center" Padding="0,0,0,2" Height="24" VerticalAlignment="Top" Grid.Row="1" Grid.ColumnSpan="2"/>
         <Button x:Name="btnSearch" Content="search" RenderTransformOrigin="0.5,0.5" Click="btnSearchClicked" BorderBrush="#FF707070" BorderThickness="1" Background="#FFD4B7B7" ForceCursor="True" Padding="0" Margin="2,65,2,0" Grid.Row="1" Grid.Column="1" Height="64" VerticalAlignment="Top"/>
@@ -133,7 +133,7 @@
         <Label x:Name="label_device_calibation" Content="Calibration" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="29" VerticalAlignment="Top" Margin="1,2,3,0" Grid.Column="3" Grid.RowSpan="2"/>
         <Label x:Name="label_device_measure" Content="Measure" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="31" VerticalAlignment="Top" Margin="0,2,7,0" Grid.Column="4" Grid.RowSpan="2"/>
         <Label x:Name="label_device_control" Content="Device manual control" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" FontWeight="Bold" Height="25" VerticalAlignment="Top" Margin="3,132,2,0" Grid.ColumnSpan="3" Grid.Row="1"/>
-        <ScrollViewer x:Name="scrollviewer" Grid.Row="2" Grid.ColumnSpan="7" MinHeight="50" Margin="2,2,0.333,0" Height="50" VerticalAlignment="Top">
+        <ScrollViewer x:Name="scrollviewer" Grid.Row="2" Grid.ColumnSpan="7" MinHeight="50" Margin="2,2,0,0" Height="72" VerticalAlignment="Top">
             <TextBlock x:Name="board" TextWrapping="Wrap" FontSize="9.333" TextDecorations="{x:Null}" Margin="2" Text="ready"/>
         </ScrollViewer>
         <CheckBox x:Name="LogVerbose" Content="developer mode" HorizontalAlignment="Left" Margin="5,210,0,0" Grid.Row="1" VerticalAlignment="Top" Grid.ColumnSpan="2" Width="203"/>

@@ -66,7 +66,6 @@ namespace Mix_Fu
         decimal attenuation = 30;
         decimal maxfreq = 26500;
         decimal span = 10000000;
-        string measure_type = "DSB down mixer";
         bool verbose = false;
         MeasureMode measureMode = MeasureMode.modeDSBDown;
         Task searchTask;
@@ -79,6 +78,9 @@ namespace Mix_Fu
         {
             instrumentManager = new InstrumentManager();
             InitializeComponent();
+            listInstruments.Add(new Instrument { Location = "location1", Name = "name1", FullName = "fname1" });
+            listInstruments.Add(new Instrument { Location = "location2", Name = "name2", FullName = "fname2" });
+            listInstruments.Add(new Instrument { Location = "location3", Name = "name3", FullName = "fname3" });
             comboLO.ItemsSource = listInstruments;
             comboIN.ItemsSource = listInstruments;
             comboOUT.ItemsSource = listInstruments;
@@ -89,7 +91,6 @@ namespace Mix_Fu
         // options
         private void listBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            measure_type = listBox.SelectedItem.ToString().Split(':')[1].TrimStart(' ');
             measureMode = (MeasureMode)listBox.SelectedIndex;
             //log("mode: " + measureMode.ToString() + "|" + ((int)measureMode).ToString());
             //log("modestr: " + listBox.SelectedItem.ToString());
@@ -101,6 +102,7 @@ namespace Mix_Fu
         }
 
         private void textBox_delay_TextChanged(object sender, TextChangedEventArgs e) {
+            //log("text: " + tmptext);
             try {
                 delay = Convert.ToInt32(textBox_delay.Text);
             }
@@ -129,9 +131,24 @@ namespace Mix_Fu
             }
         }
 
+        // comboboxes
+        private void comboIN_SelectionChanged(object sender, SelectionChangedEventArgs e) {
+            log("IN: " + ((Instrument)((ComboBox)sender).SelectedItem).Location);
+        }
+
+        private void comboOUT_SelectionChanged(object sender, SelectionChangedEventArgs e) {
+            log(((Instrument)((ComboBox)sender).SelectedItem).Location);
+        }
+
+        private void comboLO_SelectionChanged(object sender, SelectionChangedEventArgs e) {
+            log(((Instrument)((ComboBox)sender).SelectedItem).Location);
+        }
+
         // misc buttons
         private async void btnSearchClicked(object sender, RoutedEventArgs e)
         {
+            log("instrumetManager: " + instrumentManager);
+
             if (searchTask != null && !searchTask.IsCompleted) {
                 MessageBox.Show("Instrument search is already running.");
                 return;
@@ -153,7 +170,6 @@ namespace Mix_Fu
             comboLO.Items.Refresh();
             comboIN.Items.Refresh();
             comboOUT.Items.Refresh();
-
             //tabControl.Items.Refresh();
         }
 
@@ -275,17 +291,6 @@ namespace Mix_Fu
                 return;
             }
             log("end calibrate");
-            //if (measure_type == "DSB down mixer") {
-            //    cal_in_mix_DSB_down();
-            //} else if (measure_type == "DSB up mixer") {
-            //    cal_in_mix_DSB_up();
-            //} else if (measure_type == "SSB down mixer") {
-            //    cal_in_mix_SSB_down();
-            //} else if (measure_type == "SSB up mixer") {
-            //    cal_in_mix_SSB_up();
-            //} else if (measure_type == "Multiplier x2") {
-            //    cal_in_mult();
-            //}
         }
 
         private void btnCalibrateOutClicked(object sender, RoutedEventArgs e) {
@@ -310,14 +315,6 @@ namespace Mix_Fu
             default:
                 return;
             }
-
-            //if (measure_type == "DSB down mixer" | measure_type == "DSB up mixer") {
-            //    cal_out_mix_DSB();
-            //} else if (measure_type == "SSB down mixer" | measure_type == "SSB up mixer") {
-            //    cal_out_mix_SSB();
-            //} else if (measure_type == "Multiplier x2") {
-            //    cal_out_mult();
-            //}
         }
 
         private void btnCalibrateLoClicked(object sender, RoutedEventArgs e) {
@@ -327,29 +324,10 @@ namespace Mix_Fu
             } else {
                 cal_LO();
             }
-
-            //if (measure_type == "Multiplier x2") {
-            //    MessageBox.Show("Calibration error. Multiplier doesn't need LO.");
-            //    log("error: multiplier doesn't need LO");
-            //} else {
-            //    cal_LO();
-            //}
         }
 
         // measure button
         private void btnMeasureClicked(object sender, RoutedEventArgs e) {
-            // TODO: check options for errors
-            //if (measure_type == "DSB down mixer") {
-            //    measure_mix_DSB_down();
-            //} else if (measure_type == "DSB up mixer") {
-            //    measure_mix_DSB_up();
-            //} else if (measure_type == "SSB down mixer") {
-            //    measure_mix_SSB_down();
-            //} else if (measure_type == "SSB up mixer") {
-            //    measure_mix_SSB_up();
-            //} else if (measure_type == "Multiplier x2") {
-            //    measure_mult();
-            //}
             if (!canMeasure()) {
                 MessageBox.Show("Error: check log");
                 return;
@@ -544,13 +522,6 @@ namespace Mix_Fu
             //listCalData.Clear();
 
             foreach (DataRow row in dataTable.Rows) {
-                //int in_freq = 0;
-                //decimal in_pow_goal = 0;
-                //if (!Int32.TryParse(row[freqCol].ToString(), out in_freq)) {
-                //    log("error: can't parse freq=" + row[freqCol].ToString());
-                //    return;
-                //}
-
                 string t_freq = (Convert.ToInt32(row[freqCol]) * 1000000).ToString();
                 string t_pow_goal = row[powGoalCol].ToString().Replace(',', '.');
 
@@ -624,8 +595,8 @@ namespace Mix_Fu
             }
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
-            string IN = ((Instrument)comboIN.SelectedItem).Location;    
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;   
+            string IN = ((Instrument)comboIN.SelectedItem).Location;
+            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
 
             var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FRF", "PRF", "PRF-GOAL"));
 
