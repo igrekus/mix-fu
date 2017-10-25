@@ -29,6 +29,11 @@ namespace Mix_Fu
         public string Location { get; set; }
         public string Name { get; set; }
         public string FullName { get; set; }
+        public override string ToString() {
+            return base.ToString() + ": " + "loc: " + Location +
+                                            " name:" + Name +
+                                            " fname:" + FullName;
+        }
     }
 
     public class CalPoint
@@ -76,7 +81,7 @@ namespace Mix_Fu
 
         public MainWindow()
         {
-            instrumentManager = new InstrumentManager();
+            instrumentManager = new InstrumentManager(log);
             InitializeComponent();
             listInstruments.Add(new Instrument { Location = "location1", Name = "name1", FullName = "fname1" });
             listInstruments.Add(new Instrument { Location = "location2", Name = "name2", FullName = "fname2" });
@@ -133,34 +138,28 @@ namespace Mix_Fu
 
         // comboboxes
         private void comboIN_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            log("IN: " + ((Instrument)((ComboBox)sender).SelectedItem).Location);
+            instrumentManager.m_IN = (Instrument)((ComboBox)sender).SelectedItem;
         }
 
         private void comboOUT_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            log(((Instrument)((ComboBox)sender).SelectedItem).Location);
+            instrumentManager.m_OUT = (Instrument)((ComboBox)sender).SelectedItem;
         }
 
         private void comboLO_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            log(((Instrument)((ComboBox)sender).SelectedItem).Location);
+            instrumentManager.m_LO = (Instrument)((ComboBox)sender).SelectedItem;
         }
 
         // misc buttons
-        private async void btnSearchClicked(object sender, RoutedEventArgs e)
-        {
-            log("instrumetManager: " + instrumentManager);
-
+        private async void btnSearchClicked(object sender, RoutedEventArgs e) {
             if (searchTask != null && !searchTask.IsCompleted) {
                 MessageBox.Show("Instrument search is already running.");
                 return;
             }
-            // TODO: check if search already in progress
             int max_port = Convert.ToInt32(textBox_number_maxport.Text);
             int gpib = Convert.ToInt32(textBox_number_GPIB.Text);
 
             try {
-                //var task = Task.Factory.StartNew(() => searchInstruments(listInstruments, max_port, gpib));
-                //await task;
-                searchTask = Task.Factory.StartNew(() => searchInstruments(listInstruments, max_port, gpib));
+                searchTask = Task.Factory.StartNew(() => instrumentManager.searchInstruments(listInstruments, max_port, gpib));
                 await searchTask;
             }
             catch (Exception ex) {
@@ -170,55 +169,43 @@ namespace Mix_Fu
             comboLO.Items.Refresh();
             comboIN.Items.Refresh();
             comboOUT.Items.Refresh();
-            //tabControl.Items.Refresh();
         }
 
-        private void btnRunQueryClicked(object sender, RoutedEventArgs e)
-        {
+        private void btnRunQueryClicked(object sender, RoutedEventArgs e) {
             if (comboOUT.SelectedIndex == -1) {
                 MessageBox.Show("Error: no OUT instrument set");
                 return;
             }
 
-            Instrument OUT_instrument = new Instrument();
-            OUT_instrument = (Instrument)comboOUT.SelectedItem;
-
-            using (Ag90x0_SA sa = new Ag90x0_SA(OUT_instrument.Location)) {
-                string answer = "";
-                string question = textBox_query.Text;
-                log(">>> q: " + question);
-                try {
-                    sa.Transport.Query.Invoke(question, out answer);
-                }
-                catch (Exception ex) {
-                    MessageBox.Show(ex.Message);
-                    log("error: " + ex.Message);
-                }
-
-                textBox_answer.Text = answer;
-                log("> " + answer);
+            // TODO: move query syntax into InstrumentManager class
+            string question = textBox_query.Text;
+            string answer = "";
+            log(">>> query: " + question);
+            try {
+                answer = instrumentManager.query(instrumentManager.m_OUT.Location, question);
             }
+            catch (Exception ex) {
+                MessageBox.Show("Error: " + ex.Message);
+                log("error: " + ex.Message);
+                answer = "error querying instrument";
+            }
+            log("> " + answer);
         }
 
-        private void btnRunCommandClicked(object sender, RoutedEventArgs e)
-        {
+        private void btnRunCommandClicked(object sender, RoutedEventArgs e) {
             if (comboOUT.SelectedIndex == -1) {
                 MessageBox.Show("Error: no OUT instrument set");
                 return;
             }
-            Instrument OUT_instrument = new Instrument();
-            OUT_instrument = (Instrument)comboOUT.SelectedItem;
 
-            using (Ag90x0_SA sa = new Ag90x0_SA(OUT_instrument.Location)) {
-                string question = textBox_query.Text;
-                log(">>> c: " + question);
-                try {
-                    sa.Transport.Command.Invoke(question);
-                }
-                catch (Exception ex) {
-                    MessageBox.Show(ex.Message);
-                    log("error: " + ex.Message);
-                }
+            string command = textBox_query.Text;
+            log(">>> c: " + command);
+            try {
+                instrumentManager.send(instrumentManager.m_OUT.Location, command);
+            }
+            catch (Exception ex) {
+                MessageBox.Show(ex.Message);
+                log("error: " + ex.Message);
             }
         }
 
@@ -269,7 +256,12 @@ namespace Mix_Fu
 
         // calibration buttons
         private void btnCalibrateInClicked(object sender, RoutedEventArgs e) {
-            // TODO: check for input errors
+            // TODO: check for option input errors
+            if (!canCalibrateIN_OUT()) {
+                MessageBox.Show("Error: check log");
+                return;
+            }
+
             log("start calibrate");
             switch (measureMode) {
             case MeasureMode.modeDSBDown:
@@ -294,9 +286,9 @@ namespace Mix_Fu
         }
 
         private void btnCalibrateOutClicked(object sender, RoutedEventArgs e) {
-            // TODO: check for input errors
-            if (comboOUT.SelectedIndex == -1) {
-                MessageBox.Show("Error: select OUT device");
+            // TODO: check for option input errors
+            if (!canCalibrateIN_OUT()) {
+                MessageBox.Show("Error: check log");
                 return;
             }
 
@@ -318,8 +310,12 @@ namespace Mix_Fu
         }
 
         private void btnCalibrateLoClicked(object sender, RoutedEventArgs e) {
+            if (!canCalibrateIN_OUT()) {
+                MessageBox.Show("Error: check log");
+                return;
+            }
             if (measureMode == MeasureMode.modeMultiplier) {
-                MessageBox.Show("Calibration error. Multiplier doesn't need LO.");
+                MessageBox.Show("Error: multiplier doesn't need LO");
                 log("error: multiplier doesn't need LO");
             } else {
                 cal_LO();
@@ -357,11 +353,10 @@ namespace Mix_Fu
 
         #region regUtility
 
-        public void log(string mes, bool onlyVerbose = false)
-        {
+        public void log(string mes, bool onlyVerbose = false) {
             if (!onlyVerbose | onlyVerbose & verbose) {
                 Dispatcher.Invoke((Action)delegate () {
-                    board.Text += "\n" + "[" + DateTime.Now.ToShortTimeString() + "]: " + mes;
+                    textLog.Text += "\n" + "[" + DateTime.Now.ToShortTimeString() + "]: " + mes;
                     scrollviewer.ScrollToBottom();
                 });
             }
@@ -384,64 +379,26 @@ namespace Mix_Fu
 
         #region regInstrumentManager
 
-        private void searchInstruments(List<Instrument> instruments, int maxPort, int gpib) 
-        {
-            log("start instrument search...");
-            
-            instruments.Clear();
-            
-            for (int i = 0; i <= maxPort; i++) {
-                log("try GPIB" + gpib.ToString() + "::" + i.ToString() + "...");
-                
-                string idn;
-                string location = "GPIB" + gpib.ToString() + "::" + i.ToString() + "::INSTR";
-
-                try {
-                    using (AgSCPI99 instrument = new AgSCPI99(location)) {
-                        instrument.SCPI.IDN.Query(out idn);
-                        string[] idn_cut = idn.Split(',');
-                        instruments.Add(new Instrument { Location = location, Name = idn_cut[1], FullName = idn });
-                        log("found " + idn + " at " + location);
-//                        log("<debug> " + location);
-//                        log("<debug>" + idn);
-                    }
-                }
-                catch (Exception ex) {
-                    log(ex.Message, true);
-                }
-            }
-            
-            if (instruments.Count == 0) {
-                log("error: no instruments found, check connection");
-            }
-            
-            log("search done, found " + instruments.Count + " device(s)");
-        }
-
-        public static void send(string location, string com)
-        {
-            using (AgSCPI99 instrument = new AgSCPI99(location)) {
-                try {
+        public void send(string location, string com) {
+            try {
+                using (AgSCPI99 instrument = new AgSCPI99(location)) {
                     instrument.Transport.Command.Invoke(com);
-                } 
-                catch (Exception ex) {
-                    MessageBox.Show(ex.Message);
-//                    log("error: " + ex.Message);
                 }
+            }
+            catch (Exception ex) {
+                throw ex;
             }
         }
 
-        public static string query(string location, string com)
-        {
+        public string query(string location, string question) {
             string answer = "";
-            using (AgSCPI99 instrument = new AgSCPI99(location)) {
-                try {
-                    instrument.Transport.Query.Invoke(com, out answer);
+            try {
+                using (AgSCPI99 instrument = new AgSCPI99(location)) {
+                    instrument.Transport.Query.Invoke(question, out answer);
                 }
-                catch (Exception ex) {
-                    MessageBox.Show(ex.Message);
-//                    log("error: " + ex.Message);
-                }
+            }
+            catch (Exception ex) {
+                throw ex;
             }
             return answer;
         }
@@ -500,7 +457,7 @@ namespace Mix_Fu
                 return false;
             }
             if (comboLO.SelectedIndex == -1) {
-                log("error: no INinstrument selected");
+                log("error: no IN instrument selected");
                 return false;
             }
             if (comboOUT.SelectedIndex == -1) {
@@ -511,12 +468,9 @@ namespace Mix_Fu
         }
 
         public void calibrateIn(string GEN, string SA, string freqCol, string powCol, string powGoalCol) {
-            // TODO refactor, read parameters into numbers, send ToString()
-            //log("span: " + span.ToString());
-            send(SA, ":CAL:AUTO OFF");                       // выключаем автокалибровку анализатора спектра
-            send(SA, ":SENS:FREQ:SPAN " + span.ToString());  // выставляем спан
-            send(SA, ":CALC:MARK1:MODE POS");                // выставляем режим маркера
-            send(GEN, "OUTP:STAT ON");                       // включаем генератор (redundant parenthesis around "")
+            // TODO: refactor, read parameters into numbers, send ToString()
+
+            instrumentManager.prepareCalibrateIn(span);
 
             List<CalPoint> listCalData = new List<CalPoint>();
             //listCalData.Clear();
@@ -582,17 +536,12 @@ namespace Mix_Fu
                 row[powCol] = listCalData.Find(Cal_Point => Cal_Point.freq == t_freq && Cal_Point.pow == t_pow_goal).calPow;
                 log("debug: add CalPoint from list:" + row[powCol]);
             }
-            send(GEN, ("OUTP:STAT OFF"));   //выключаем генератор
-            send(SA, ":CAL:AUTO ON");       //включаем автокалибровку анализатора спектра
+            send(SA, ":CAL:AUTO ON");     //включаем автокалибровку анализатора спектра
+            send(GEN, "OUTP:STAT OFF");   //выключаем генератор
         }
 
         public void cal_in_mix_DSB_down()
         {
-            // TODO: move condition check into the button event
-            if (!canCalibrateIN_OUT()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string IN = ((Instrument)comboIN.SelectedItem).Location;
@@ -605,10 +554,6 @@ namespace Mix_Fu
 
         public void cal_in_mix_DSB_up()
         {
-            if (!canCalibrateIN_OUT()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string IN = ((Instrument)comboIN.SelectedItem).Location;
@@ -621,10 +566,6 @@ namespace Mix_Fu
 
         public void cal_in_mix_SSB_down()
         {
-            if (!canCalibrateIN_OUT()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string IN = ((Instrument)comboIN.SelectedItem).Location;
@@ -640,10 +581,6 @@ namespace Mix_Fu
         {
             log("warning: SSB UP calibration implemented in test mode");
 
-            if (!canCalibrateIN_OUT()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string IN = ((Instrument)comboIN.SelectedItem).Location;
@@ -732,10 +669,6 @@ namespace Mix_Fu
         }
 
         public void cal_in_mult() {
-            if (!canCalibrateIN_OUT()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string IN = ((Instrument)comboIN.SelectedItem).Location;
