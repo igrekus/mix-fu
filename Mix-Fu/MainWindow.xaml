@@ -136,6 +136,6 @@
         <ScrollViewer x:Name="scrollviewer" Grid.Row="2" Grid.ColumnSpan="7" MinHeight="50" Margin="2,2,0,0" Height="72" VerticalAlignment="Top">
             <TextBlock x:Name="textLog" TextWrapping="Wrap" FontSize="9.333" TextDecorations="{x:Null}" Margin="2" Text="Ready"/>
         </ScrollViewer>
-        <CheckBox x:Name="LogVerbose" Content="developer mode" HorizontalAlignment="Left" Margin="5,210,0,0" Grid.Row="1" VerticalAlignment="Top" Grid.ColumnSpan="2" Width="203"/>
+        <CheckBox x:Name="LogVerbose" Content="developer mode" HorizontalAlignment="Left" Margin="5,210,0,0" Grid.Row="1" VerticalAlignment="Top" Grid.ColumnSpan="2" Width="203" Click="LogVerboseToggled"/>
     </Grid>
 </Window>

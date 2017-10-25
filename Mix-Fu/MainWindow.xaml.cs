@@ -61,8 +61,8 @@ namespace Mix_Fu
         #region regDataMembers
 
         List<Instrument> listInstruments = new List<Instrument>();
-        //List<CalPoint> listCalData = new List<CalPoint>();
-//        List<MeasPoint> listMeasData = new List<MeasPoint>();
+        List<CalPoint> listCalData = new List<CalPoint>();
+        //        List<MeasPoint> listMeasData = new List<MeasPoint>();
 
         DataTable dataTable;
         string xlsx_path = "";
@@ -73,7 +73,9 @@ namespace Mix_Fu
         decimal span = 10000000;
         bool verbose = false;
         MeasureMode measureMode = MeasureMode.modeDSBDown;
+
         Task searchTask;
+        Task calibrationTask;
 
         InstrumentManager instrumentManager = null;
 
@@ -101,7 +103,7 @@ namespace Mix_Fu
             //log("modestr: " + listBox.SelectedItem.ToString());
         }
 
-        private void LogVerbose_Checked(object sender, RoutedEventArgs e)
+        private void LogVerboseToggled(object sender, RoutedEventArgs e)
         {
             verbose = LogVerbose.IsChecked ?? false;
         }
@@ -110,6 +112,7 @@ namespace Mix_Fu
             //log("text: " + tmptext);
             try {
                 delay = Convert.ToInt32(textBox_delay.Text);
+                instrumentManager.delay = delay;
             }
             catch (Exception ex) {
                 MessageBox.Show("Введите задержку в мсек");
@@ -117,8 +120,11 @@ namespace Mix_Fu
         }
 
         private void textBox_maxfreq_TextChanged(object sender, TextChangedEventArgs e) {
-            if (!decimal.TryParse(textBox_maxfreq.Text.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out maxfreq)) {
+            if (!decimal.TryParse(textBox_maxfreq.Text.Replace(',', '.'), 
+                                  NumberStyles.Any, CultureInfo.InvariantCulture, out maxfreq)) {
                 MessageBox.Show("Введите максимальную рабочую частоту в МГц, на которой смогут работать и генератор, и анализатор спектра");
+            } else {
+                instrumentManager.maxfreq = maxfreq;
             }
         }
 
@@ -127,12 +133,16 @@ namespace Mix_Fu
                 MessageBox.Show("Введите требуемое значение Span анализатора спектра в МГц");
             } else { 
                 span = span * 1000000;
+                instrumentManager.span = span;
             }
         }
 
         private void textBox_attenuation_TextChanged(object sender, TextChangedEventArgs e) {
-            if (!decimal.TryParse(textBox_attenuation.Text.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out attenuation)) {
+            if (!decimal.TryParse(textBox_attenuation.Text.Replace(',', '.'), 
+                                  NumberStyles.Any, CultureInfo.InvariantCulture, out attenuation)) {
                 MessageBox.Show("Введите значение входной аттенюации анализатора спектра в дБ");
+            } else {
+                instrumentManager.attenuation = attenuation;
             }
         }
 
@@ -158,13 +168,9 @@ namespace Mix_Fu
             int max_port = Convert.ToInt32(textBox_number_maxport.Text);
             int gpib = Convert.ToInt32(textBox_number_GPIB.Text);
 
-            try {
-                searchTask = Task.Factory.StartNew(() => instrumentManager.searchInstruments(listInstruments, max_port, gpib));
-                await searchTask;
-            }
-            catch (Exception ex) {
-                log(ex.Message);
-            }
+            searchTask = Task.Factory.StartNew(
+                () => instrumentManager.searchInstruments(listInstruments, max_port, gpib));
+            await searchTask;
             
             comboLO.Items.Refresh();
             comboIN.Items.Refresh();
@@ -223,8 +229,8 @@ namespace Mix_Fu
                     } else { return; }
                 }
                 catch (Exception ex) {
-                    MessageBox.Show("Ошибка: файл не открыт. Сообщение об ошибке: " + ex.Message);
-                    log(ex.Message);
+                    MessageBox.Show("Error: can't open file, check log");
+                    log("error: " + ex.Message);
                 }
             }
         }
@@ -448,6 +454,10 @@ namespace Mix_Fu
                 log("error: no OUT instrument selected");
                 return false;
             }
+            if ((calibrationTask != null) && (!calibrationTask.IsCompleted)) {
+                log("error: calibration is already running");
+                return false;
+            }
             return true;
         }
 
@@ -464,13 +474,16 @@ namespace Mix_Fu
                 log("error: no OUT instrument selected");
                 return false;
             }
+            if ((calibrationTask != null) && (!calibrationTask.IsCompleted)) {
+                log("error: calibration is already running");
+                return false;
+            }
             return true;
         }
 
         public void calibrateIn(string GEN, string SA, string freqCol, string powCol, string powGoalCol) {
             // TODO: refactor, read parameters into numbers, send ToString()
-
-            instrumentManager.prepareCalibrateIn(span);
+            instrumentManager.prepareCalibrateIn();
 
             List<CalPoint> listCalData = new List<CalPoint>();
             //listCalData.Clear();
@@ -540,14 +553,14 @@ namespace Mix_Fu
             send(GEN, "OUTP:STAT OFF");   //выключаем генератор
         }
 
-        public void cal_in_mix_DSB_down()
-        {
+        public void cal_in_mix_DSB_down() {
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string IN = ((Instrument)comboIN.SelectedItem).Location;
             string OUT = ((Instrument)comboOUT.SelectedItem).Location;
 
-            var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FRF", "PRF", "PRF-GOAL"));
+            //var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FRF", "PRF", "PRF-GOAL"));
+            calibrationTask = Task.Factory.StartNew(() => instrumentManager.calibrateIn(dataTable, IN, OUT, "FRF", "PRF", "PRF-GOAL"));
 
             dataGrid.ItemsSource = dataTable.AsDataView();
         }
