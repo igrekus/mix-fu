@@ -38,13 +38,54 @@ namespace Mix_Fu
 
     public class CalPoint
     {
-        public string freq { get; set; }
-        public string pow { get; set; }
-        public string calPow { get; set; }
+        public string freq { get; set; } = "";
+        public string pow { get; set; } = "";
+        public string calPow { get; set; } = "";
+
+        public decimal freqD { get; set; } = 0;
+        public decimal powD { get; set; } = 0;
+        public decimal calpowD { get; set; } = 0;
+
         public override string ToString() {
             return base.ToString() + ": " + "freq:" + freq.ToString() + 
                                             " pow:" + pow.ToString() + 
                                             " calPow:" + calPow.ToString();
+        }
+
+        public override bool Equals(object obj) {
+            return this.Equals(obj as CalPoint);
+        }
+
+        // TODO: modify for decimal parameters
+        public bool Equals(CalPoint rhs) {
+            if (Object.ReferenceEquals(rhs, null)) {
+                return false;
+            }
+            if (Object.ReferenceEquals(this, rhs)) {
+                return true;
+            }
+            if (this.GetType() != rhs.GetType()) {
+                return false;
+            }
+            return (freq == rhs.freq) && (pow == rhs.pow);
+        }
+
+        public override int GetHashCode() {
+            return freq.GetHashCode() + pow.GetHashCode();
+        }
+
+        public static bool operator ==(CalPoint lhs, CalPoint rhs) {
+            if (Object.ReferenceEquals(lhs, null)) {
+                if (Object.ReferenceEquals(rhs, null)) {
+                    return true;
+                }
+                return false;
+            }
+            return lhs.Equals(rhs);
+        }
+
+        public static bool operator !=(CalPoint lhs, CalPoint rhs) {
+            return !(lhs == rhs);
         }
     }
 
@@ -85,12 +126,10 @@ namespace Mix_Fu
         {
             instrumentManager = new InstrumentManager(log);
             InitializeComponent();
-            listInstruments.Add(new Instrument { Location = "location1", Name = "name1", FullName = "fname1" });
-            listInstruments.Add(new Instrument { Location = "location2", Name = "name2", FullName = "fname2" });
-            listInstruments.Add(new Instrument { Location = "location3", Name = "name3", FullName = "fname3" });
             comboLO.ItemsSource = listInstruments;
             comboIN.ItemsSource = listInstruments;
             comboOUT.ItemsSource = listInstruments;
+            CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
         }
 
         #region regUiEvents
@@ -171,10 +210,18 @@ namespace Mix_Fu
             searchTask = Task.Factory.StartNew(
                 () => instrumentManager.searchInstruments(listInstruments, max_port, gpib));
             await searchTask;
-            
-            comboLO.Items.Refresh();
+
+            listInstruments.Add(new Instrument { Location = "IN_location", Name = "IN", FullName = "IN at IN_location" });
+            listInstruments.Add(new Instrument { Location = "OUT_location", Name = "OUT", FullName = "OUT at OUT_location" });
+            listInstruments.Add(new Instrument { Location = "LO_location", Name = "LO", FullName = "LO at LO_location" });
+
             comboIN.Items.Refresh();
             comboOUT.Items.Refresh();
+            comboLO.Items.Refresh();
+
+            comboIN.SelectedIndex = 0;
+            comboOUT.SelectedIndex = 1;
+            comboLO.SelectedIndex = 2;
         }
 
         private void btnRunQueryClicked(object sender, RoutedEventArgs e) {
@@ -268,7 +315,6 @@ namespace Mix_Fu
                 return;
             }
 
-            log("start calibrate");
             switch (measureMode) {
             case MeasureMode.modeDSBDown:
                 cal_in_mix_DSB_down();
@@ -288,7 +334,6 @@ namespace Mix_Fu
             default:
                 return;
             }
-            log("end calibrate");
         }
 
         private void btnCalibrateOutClicked(object sender, RoutedEventArgs e) {
