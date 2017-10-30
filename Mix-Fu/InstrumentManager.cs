@@ -13,6 +13,8 @@ namespace Mix_Fu {
 
     class InstrumentManager {
 
+        private const string decimalFormat = "0.00";
+
         // TODO: make instrument classes: Generator, Analyser, hide queries there into methods
         public Instrument m_IN { get; set; }
         public Instrument m_OUT { get; set; }
@@ -73,7 +75,7 @@ namespace Mix_Fu {
 
             // mock
             log("query: " + question + " to: " + location, false);
-            return "-25.0";
+            return "-25.5"; // TODO: test diff value
         }
 
         public void searchInstruments(List<Instrument> instruments, int maxPort, int gpib) {
@@ -123,51 +125,42 @@ namespace Mix_Fu {
 
         public void calibrateIn(DataTable dataTable, string GEN, string SA, string freqCol, string powCol, string powGoalCol) {
             log("start calibrate IN", false);
-            // TODO: refactor, read parameters into numbers, send ToString()
             prepareCalibrateIn();
 
             List<CalPoint> listCalData = new List<CalPoint>();
-            listCalData.Add(new CalPoint { freq = "4000000", pow = "-25" });
-            listCalData.Add(new CalPoint { freq = "4100000.0", pow = "-25" });
-            listCalData.Add(new CalPoint { freq = "4200000.0", pow = "-25" });
-            //listCalData.Clear();
+
             foreach (DataRow row in dataTable.Rows) {
                 string inFreqStr = row[freqCol].ToString().Replace(',', '.');
-                decimal inFreqDec = 0;
-
                 string inPowGoalStr = row[powGoalCol].ToString().Replace(',', '.');
-                decimal inPowGoalDec = 0;
 
+                if (string.IsNullOrEmpty(inFreqStr) || inFreqStr == "-" ||
+                    string.IsNullOrEmpty(inPowGoalStr) || inPowGoalStr == "-") {
+                    continue;
+                }
+
+                decimal inFreqDec = 0;
+                decimal inPowGoalDec = 0;
                 if (!decimal.TryParse(inFreqStr, NumberStyles.Any, CultureInfo.InvariantCulture,
-                        out inFreqDec)) {
+                                      out inFreqDec)) {
                     log("error: fail parsing " + inFreqStr, false);
                     continue;
                 }
                 if (!decimal.TryParse(inPowGoalStr, NumberStyles.Any, CultureInfo.InvariantCulture,
-                        out inPowGoalDec)) {
+                                      out inPowGoalDec)) {
                     log("error: fail parsing " + inPowGoalStr, false);
                     continue;
                 }
                 inFreqDec *= 1000000;
 
-                //listCalData.Add(new CalPoint { freq = inFreqStr, pow = inPowGoalStr, calPow = inPowGoalStr });
-                bool exists = listCalData.Exists(point => point.freq == inFreqStr && point.pow == inPowGoalStr);
+                bool exists = listCalData.Exists(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
 
-                log("debug: freq: " + inFreqDec + 
-                    " pgoal: " + inPowGoalDec + 
-                    " exists: " + exists, false);
+                log("debug: calibrate: freq=" + inFreqDec + 
+                                    " pgoal=" + inPowGoalDec + 
+                                   " exists=" + exists, false);
 
                 if (!exists) {
-                    string t_pow = "";
-                    string t_pow_temp = "";
-
-                    decimal t_pow_dec = 0;
-                    decimal t_pow_goal_dec = 0;
-                    decimal t_pow_temp_dec = 0;
+                    decimal tempPowDec = inPowGoalDec;
                     decimal err = 1;
-
-                    t_pow_temp = inPowGoalStr;
-                    t_pow_temp_dec = t_pow_goal_dec;
 
                     send(GEN, "SOUR:FREQ " + inFreqDec);
                     send(SA, ":SENSe:FREQuency:RF:CENTer " + inFreqDec);
@@ -176,36 +169,114 @@ namespace Mix_Fu {
                     int count = 0;
                     int relax_temp = relax;
                     while (count < 5 && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
-                        // set GEN source power level to POWGOAL column value
-                        send(GEN, ("SOUR:POW " + t_pow_temp));
-                        // wait before querying SA for response
+                        decimal readPowDec = 0;
+                        send(GEN, "SOUR:POW " + tempPowDec);
                         Thread.Sleep(relax);
-                        // read SA marker Y-value
-                        t_pow = query(SA, ":CALCulate:MARKer:Y?");
-                        log("marker y: " + t_pow, false);
-                        decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_dec);
-                        // calc diff between given goal pow and read pow
-                        err = t_pow_goal_dec - t_pow_dec;
+                        // TODO: inline readPow
+                        string readPow = query(SA, ":CALCulate:MARKer:Y?");
+                        decimal.TryParse(readPow, NumberStyles.Any, 
+                                         CultureInfo.InvariantCulture, out readPowDec);
 
-                        // new calibration point is measured pow + err
-                        t_pow_temp_dec += err;
-                        t_pow_temp = t_pow_temp_dec.ToString("0.00", CultureInfo.InvariantCulture);
+                        err = inPowGoalDec - readPowDec;
+                        tempPowDec += err;
 
-                        count++;
+                        ++count;
                         relax += 50;
                     }
-                    // measured pow, write down ERR
                     relax = relax_temp;
-                    row["ERR"] = err.ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
-                    // add measured calibration point
-                    listCalData.Add(new CalPoint { freq = inFreqStr, pow = inPowGoalStr, calPow = t_pow_temp.Replace('.', ',') });
-                    log("debug: new CalPoint: freq=" + inFreqStr + " pow:" + inPowGoalStr + " calpow:" + t_pow_temp, false);
+                    listCalData.Add(new CalPoint { freqD = inFreqDec,
+                                                   powD = inPowGoalDec,
+                                                   calPowD = tempPowDec,
+                                                   error = err });
+                    
+                    log("debug: new " + listCalData.Last().ToString(), false);
                 }
-                // write pow column, use cached data if already measured
-                row[powCol] = listCalData.Find(point => point.freq == inFreqStr && point.pow == inPowGoalStr).calPow;
-                log("debug: update table:" + row[powCol], false);
+                CalPoint updatedPoint = listCalData.Find(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
+                // ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
+                row["ERR"] = updatedPoint.error.ToString(decimalFormat).Replace('.', ',');
+                row[powCol] = updatedPoint.calPowD.ToString(decimalFormat).Replace('.', ',');
             }
+            releaseInstrument();
+            log("end calibrate IN", false);
+        }
 
+        public void calibrateInMult(DataTable dataTable, string GEN, string SA, string freqCol, string powCol, string powGoalCol) {
+            // TODO: merge with calibrateIn(); diff: span adjustment const, additional SA command, delay instead of relax
+            log("start calibrate IN mult", false);
+            prepareCalibrateIn();
+
+            send(SA, ":POW:ATT " + attenuation.ToString());
+            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
+            //send(IN, ("SOUR:POW " + "-100"));
+
+            List<CalPoint> listCalData = new List<CalPoint>();
+
+            foreach (DataRow row in dataTable.Rows) {
+                string inFreqStr = row[freqCol].ToString().Replace(',', '.');
+                string inPowGoalStr = row[powGoalCol].ToString().Replace(',', '.');
+
+                if (string.IsNullOrEmpty(inFreqStr) || inFreqStr == "-" || 
+                    string.IsNullOrEmpty(inPowGoalStr) || inPowGoalStr == "-") {
+                    continue;
+                }
+
+                decimal inFreqDec = 0;
+                decimal inPowGoalDec = 0;
+                if (!decimal.TryParse(inFreqStr, NumberStyles.Any, CultureInfo.InvariantCulture,
+                                      out inFreqDec)) {
+                    log("error: fail parsing " + inFreqStr, false);
+                    continue;
+                }
+                if (!decimal.TryParse(inPowGoalStr, NumberStyles.Any, CultureInfo.InvariantCulture,
+                                      out inPowGoalDec)) {
+                    log("error: fail parsing " + inPowGoalStr, false);
+                    continue;
+                }
+                inFreqDec *= 1000000000;  // TODO: check freq adjustment
+
+                bool exists = listCalData.Exists(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
+
+                log("debug: calibrate: freq=" + inFreqDec +
+                                    " pgoal=" + inPowGoalDec +
+                                   " exists=" + exists, false);
+
+                if (!exists) {
+                    decimal tempPowDec = inPowGoalDec;
+                    decimal err = 1;
+
+                    send(GEN, "SOUR:FREQ " + inFreqDec);
+                    send(SA, ":SENSe:FREQuency:RF:CENTer " + inFreqDec);
+                    send(SA, ":CALCulate:MARKer1:X:CENTer " + inFreqDec);
+
+                    int count = 0;
+                    int delay_temp = delay;
+                    while (count < 5 && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
+                        decimal readPowDec = 0;
+                        send(GEN, "SOUR:POW " + tempPowDec);
+                        Thread.Sleep(delay);
+                        string readPow = query(SA, ":CALCulate:MARKer:Y?");
+                        decimal.TryParse(readPow, NumberStyles.Any, 
+                                         CultureInfo.InvariantCulture, out readPowDec);
+
+                        err = inPowGoalDec - readPowDec;
+                        tempPowDec += err;
+
+                        ++count;
+                        delay += 50;
+                    }
+                    delay = delay_temp;
+
+                    listCalData.Add(new CalPoint { freqD = inFreqDec,
+                                                    powD = inPowGoalDec,
+                                                 calPowD = tempPowDec,
+                                                   error = err });
+                    log("debug: new " + listCalData.Last().ToString(), false);
+                }
+                CalPoint updatedPoint = listCalData.Find(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
+                // ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
+                row["ERR"] = updatedPoint.error.ToString(decimalFormat).Replace('.', ',');
+                row[powCol] = updatedPoint.calPowD.ToString(decimalFormat).Replace('.', ',');
+            }
             releaseInstrument();
             log("end calibrate IN", false);
         }

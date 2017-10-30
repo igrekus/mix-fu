@@ -44,12 +44,14 @@ namespace Mix_Fu
 
         public decimal freqD { get; set; } = 0;
         public decimal powD { get; set; } = 0;
-        public decimal calpowD { get; set; } = 0;
+        public decimal calPowD { get; set; } = 0;
+        public decimal error { get; set; } = 0;
 
         public override string ToString() {
-            return base.ToString() + ": " + "freq:" + freq.ToString() + 
-                                            " pow:" + pow.ToString() + 
-                                            " calPow:" + calPow.ToString();
+            return base.ToString() + ": " + "freq=" + freqD.ToString() + 
+                                            " pow=" + powD.ToString() + 
+                                            " calPow=" + calPowD.ToString() + 
+                                            " err=" + error.ToString();
         }
 
         public override bool Equals(object obj) {
@@ -475,7 +477,7 @@ namespace Mix_Fu
                     DataRow row = dataTable.Rows.Add();
                     foreach (var cell in wsRow) {
                         //row[cell.Start.Column - 1] = cell.Text;
-                        row[cell.Start.Column - 1] = cell.Value;
+                        row[cell.Start.Column - 1] = cell.Value.ToString().Replace(".", ",");
                     }
                 }
                 return dataTable;
@@ -485,7 +487,7 @@ namespace Mix_Fu
         #endregion regDataManager
 
         #region regCalibrationManager
-        // TODO: extract these to a separate class, remove dataTable, IN, OUT reassignment
+
         public bool canCalibrateIN_OUT() {
             if (dataTable == null) {
                 log("error: no table open");
@@ -599,6 +601,7 @@ namespace Mix_Fu
         }
 
         public void cal_in_mix_DSB_down() {
+            // TODO: extract these to a separate class, remove dataTable, IN, OUT reassignment
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string IN = ((Instrument)comboIN.SelectedItem).Location;
@@ -617,7 +620,8 @@ namespace Mix_Fu
             string IN = ((Instrument)comboIN.SelectedItem).Location;
             string OUT = ((Instrument)comboOUT.SelectedItem).Location;
 
-            var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FIF", "PIF", "PIF-GOAL"));
+            //var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FIF", "PIF", "PIF-GOAL"));
+            calibrationTask = Task.Factory.StartNew(() => instrumentManager.calibrateIn(dataTable, IN, OUT, "FIF", "PIF", "PIF-GOAL"));
 
             dataGrid.ItemsSource = dataTable.AsDataView();
         }
@@ -629,8 +633,8 @@ namespace Mix_Fu
             string IN = ((Instrument)comboIN.SelectedItem).Location;
             string OUT = ((Instrument)comboOUT.SelectedItem).Location;
 
-            var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FLSB", "PLSB", "PLSB-GOAL"));
-            task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FUSB", "PUSB", "PUSB-GOAL"));
+            //var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FLSB", "PLSB", "PLSB-GOAL"));
+            calibrationTask = Task.Factory.StartNew(() => instrumentManager.calibrateIn(dataTable, IN, OUT, "FUSB", "PUSB", "PUSB-GOAL"));
 
             dataGrid.ItemsSource = dataTable.AsDataView();
         }
@@ -644,8 +648,9 @@ namespace Mix_Fu
             string IN = ((Instrument)comboIN.SelectedItem).Location;
             string OUT = ((Instrument)comboOUT.SelectedItem).Location;
 
-            // check colPow parameter ("PIF")
-            var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FIF", "PIF", "PIF-GOAL"));
+            // TODO: check colPow parameter ("PIF")
+            //var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FIF", "PIF", "PIF-GOAL"));
+            calibrationTask = Task.Factory.StartNew(() => instrumentManager.calibrateIn(dataTable, IN, OUT, "FIF", "PIF", "PIF-GOAL"));
 
             dataGrid.ItemsSource = dataTable.AsDataView();
         }
@@ -658,7 +663,6 @@ namespace Mix_Fu
             send(SA, ":POW:ATT " + attenuation.ToString());
 
             List<CalPoint> listCalData = new List<CalPoint>();
-            //listCalData.Clear();
 
             //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
             //send(IN, ("SOUR:POW " + "-100"));
