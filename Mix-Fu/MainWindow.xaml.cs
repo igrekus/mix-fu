@@ -16,6 +16,12 @@ using Agilent.CommandExpert.ScpiNet.Ag90x0_SA_A_08_03;
 
 namespace Mix_Fu
 {
+    public struct Constants {
+        public const string decimalFormat = "0.00";
+        public const int GHz = 1000000000;
+        public const int MHz = 1000000;
+    }
+
     enum MeasureMode : byte {
         modeDSBDown = 0,
         modeDSBUp,
@@ -24,8 +30,13 @@ namespace Mix_Fu
         modeMultiplier
     };
 
-    public class Instrument
-    {
+    public struct ParameterStruct {
+        public string colFreq;
+        public string colPow;
+        public string colPowGoal;
+    }
+
+    public class Instrument {
         public string Location { get; set; }
         public string Name { get; set; }
         public string FullName { get; set; }
@@ -36,8 +47,7 @@ namespace Mix_Fu
         }
     }
 
-    public class CalPoint
-    {
+    public class CalibrationPoint {
         public string freq { get; set; } = "";
         public string pow { get; set; } = "";
         public string calPow { get; set; } = "";
@@ -55,11 +65,11 @@ namespace Mix_Fu
         }
 
         public override bool Equals(object obj) {
-            return this.Equals(obj as CalPoint);
+            return this.Equals(obj as CalibrationPoint);
         }
 
         // TODO: modify for decimal parameters
-        public bool Equals(CalPoint rhs) {
+        public bool Equals(CalibrationPoint rhs) {
             if (Object.ReferenceEquals(rhs, null)) {
                 return false;
             }
@@ -76,7 +86,7 @@ namespace Mix_Fu
             return freq.GetHashCode() + pow.GetHashCode();
         }
 
-        public static bool operator ==(CalPoint lhs, CalPoint rhs) {
+        public static bool operator ==(CalibrationPoint lhs, CalibrationPoint rhs) {
             if (Object.ReferenceEquals(lhs, null)) {
                 if (Object.ReferenceEquals(rhs, null)) {
                     return true;
@@ -86,34 +96,32 @@ namespace Mix_Fu
             return lhs.Equals(rhs);
         }
 
-        public static bool operator !=(CalPoint lhs, CalPoint rhs) {
+        public static bool operator !=(CalibrationPoint lhs, CalibrationPoint rhs) {
             return !(lhs == rhs);
         }
     }
 
-    public class MeasPoint
-    {
+    public class MeasurePoint {
         public List<string> freqs { get; set; }
         public List<string> powers { get; set; }
         public List<string> freqs_meas { get; set; }
         public List<string> powers_meas { get; set; }
     }
     
-    public partial class MainWindow : Window
-    {
+    public partial class MainWindow : Window {
+
         #region regDataMembers
 
         List<Instrument> listInstruments = new List<Instrument>();
-        List<CalPoint> listCalData = new List<CalPoint>();
+        // List<CalPoint> listCalData = new List<CalPoint>();
         //        List<MeasPoint> listMeasData = new List<MeasPoint>();
 
         DataTable dataTable;
         string xlsx_path = "";
         int delay = 300;
-        int relax = 70;
         decimal attenuation = 30;
         decimal maxfreq = 26500;
-        decimal span = 10000000;
+        decimal span = 10*Constants.MHz;
         bool verbose = false;
         MeasureMode measureMode = MeasureMode.modeDSBDown;
 
@@ -122,30 +130,42 @@ namespace Mix_Fu
 
         InstrumentManager instrumentManager = null;
 
-        #endregion regDataMembers
+        Dictionary<MeasureMode, ParameterStruct> inParameters = null;
+        ParameterStruct loParameters;
 
-        public MainWindow()
+    #endregion regDataMembers
+
+    public MainWindow()
         {
             instrumentManager = new InstrumentManager(log);
+
+            inParameters = new Dictionary<MeasureMode, ParameterStruct>();
+            inParameters.Add(MeasureMode.modeDSBDown,    new ParameterStruct { colFreq = "FRF", colPow = "PRF", colPowGoal = "PRF-GOAL" });
+            inParameters.Add(MeasureMode.modeDSBUp,      new ParameterStruct { colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL" });
+            inParameters.Add(MeasureMode.modeSSBDown,    new ParameterStruct { colFreq = "FUSB", colPow = "PUSB", colPowGoal = "PUSB-GOAL" });
+            inParameters.Add(MeasureMode.modeSSBUp,      new ParameterStruct { colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL" });
+            inParameters.Add(MeasureMode.modeMultiplier, new ParameterStruct { colFreq = "FH1", colPow = "PIN", colPowGoal = "PIN-GOAL" });
+            loParameters = new ParameterStruct { colFreq = "FLO", colPow = "PLO", colPowGoal = "PLO-GOAL" };
+
             InitializeComponent();
+
             comboLO.ItemsSource = listInstruments;
             comboIN.ItemsSource = listInstruments;
             comboOUT.ItemsSource = listInstruments;
+
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
         }
 
         #region regUiEvents
 
         // options
-        private void listBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
+        private void listBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
             measureMode = (MeasureMode)listBox.SelectedIndex;
             //log("mode: " + measureMode.ToString() + "|" + ((int)measureMode).ToString());
             //log("modestr: " + listBox.SelectedItem.ToString());
         }
 
-        private void LogVerboseToggled(object sender, RoutedEventArgs e)
-        {
+        private void LogVerboseToggled(object sender, RoutedEventArgs e) {
             verbose = LogVerbose.IsChecked ?? false;
         }
 
@@ -165,6 +185,7 @@ namespace Mix_Fu
                                   NumberStyles.Any, CultureInfo.InvariantCulture, out maxfreq)) {
                 MessageBox.Show("Введите максимальную рабочую частоту в МГц, на которой смогут работать и генератор, и анализатор спектра");
             } else {
+                maxfreq *= Constants.MHz;
                 instrumentManager.maxfreq = maxfreq;
             }
         }
@@ -173,7 +194,7 @@ namespace Mix_Fu
             if (!decimal.TryParse(textBox_span.Text.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out span)) {
                 MessageBox.Show("Введите требуемое значение Span анализатора спектра в МГц");
             } else { 
-                span = span * 1000000;
+                span = span * Constants.MHz;
                 instrumentManager.span = span;
             }
         }
@@ -211,6 +232,8 @@ namespace Mix_Fu
             }
             int max_port = Convert.ToInt32(textBox_number_maxport.Text);
             int gpib = Convert.ToInt32(textBox_number_GPIB.Text);
+
+            listInstruments.Clear();
 
             searchTask = Task.Factory.StartNew(
                 () => instrumentManager.searchInstruments(listInstruments, max_port, gpib));
@@ -319,26 +342,7 @@ namespace Mix_Fu
                 MessageBox.Show("Error: check log");
                 return;
             }
-
-            switch (measureMode) {
-            case MeasureMode.modeDSBDown:
-                cal_in_mix_DSB_down();
-                break;
-            case MeasureMode.modeDSBUp:
-                cal_in_mix_DSB_up();
-                break;
-            case MeasureMode.modeSSBDown:
-                cal_in_mix_SSB_down();
-                break;
-            case MeasureMode.modeSSBUp:
-                cal_in_mix_SSB_up();
-                break;
-            case MeasureMode.modeMultiplier:
-                cal_in_mult();
-                break;
-            default:
-                return;
-            }
+            calibrateIN();
         }
 
         private void btnCalibrateOutClicked(object sender, RoutedEventArgs e) {
@@ -347,35 +351,20 @@ namespace Mix_Fu
                 MessageBox.Show("Error: check log");
                 return;
             }
-
-            switch (measureMode) {
-            case MeasureMode.modeDSBDown:
-            case MeasureMode.modeDSBUp:
-                cal_out_mix_DSB();
-                break;
-            case MeasureMode.modeSSBDown:
-            case MeasureMode.modeSSBUp:
-                cal_out_mix_SSB();
-                break;
-            case MeasureMode.modeMultiplier:
-                cal_out_mult();
-                break;
-            default:
-                return;
-            }
+            calibrateOUT();
         }
 
         private void btnCalibrateLoClicked(object sender, RoutedEventArgs e) {
-            if (!canCalibrateIN_OUT()) {
+            if (!canCalibrateLO()) {
                 MessageBox.Show("Error: check log");
                 return;
             }
             if (measureMode == MeasureMode.modeMultiplier) {
-                MessageBox.Show("Error: multiplier doesn't need LO");
+                MessageBox.Show("Error: check log");
                 log("error: multiplier doesn't need LO");
-            } else {
-                cal_LO();
+                return;
             }
+            calibrateLO();
         }
 
         // measure button
@@ -491,6 +480,8 @@ namespace Mix_Fu
 
         #region regCalibrationManager
 
+        // TODO: move to a module (instrumentManager?)
+        // TODO: use instrumentManager properties as IN OUT
         public bool canCalibrateIN_OUT() {
             if (dataTable == null) {
                 log("error: no table open");
@@ -517,7 +508,7 @@ namespace Mix_Fu
                 return false;
             }
             if (comboLO.SelectedIndex == -1) {
-                log("error: no IN instrument selected");
+                log("error: no LO instrument selected");
                 return false;
             }
             if (comboOUT.SelectedIndex == -1) {
@@ -531,417 +522,24 @@ namespace Mix_Fu
             return true;
         }
 
-        public void calibrateIn(string GEN, string SA, string freqCol, string powCol, string powGoalCol) {
-            // TODO: refactor, read parameters into numbers, send ToString()
-            instrumentManager.prepareCalibrateIn();
-
-            List<CalPoint> listCalData = new List<CalPoint>();
-            //listCalData.Clear();
-
-            foreach (DataRow row in dataTable.Rows) {
-                string t_freq = (Convert.ToInt32(row[freqCol]) * 1000000).ToString();
-                string t_pow_goal = row[powGoalCol].ToString().Replace(',', '.');
-
-                // is calibration point already measured?
-                bool exists = listCalData.Exists(Cal_Point => 
-                    Cal_Point.freq == t_freq && Cal_Point.pow == t_pow_goal);
-                
-                if (!exists) {
-                    string t_pow = "";
-                    string t_pow_temp = "";
-                    decimal t_pow_dec = 0;
-                    decimal t_pow_goal_dec = 0;
-                    decimal t_pow_temp_dec = 0;
-
-                    decimal err = 1;
-
-                    if (!decimal.TryParse(t_pow_goal, NumberStyles.Any, CultureInfo.InvariantCulture, 
-                        out t_pow_goal_dec)) { log("error: can't parse: [" + t_pow_goal + 
-                                                   "] at row " + dataTable.Rows.IndexOf(row) + ", skipping", false /*true*/); continue; }
-
-                    t_pow_temp = t_pow_goal;
-                    t_pow_temp_dec = t_pow_goal_dec;
-
-                    send(GEN, ("SOUR:FREQ " + t_freq));
-                    send(SA, (":SENSe:FREQuency:RF:CENTer " + t_freq));
-                    send(SA, (":CALCulate:MARKer1:X:CENTer " + t_freq));
-
-                    int count = 0;
-                    int relax_temp = relax;
-                    // while err is within the bounds 0.05...10, 5 iterations max
-                    while (count < 5 && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
-                        // set GEN source power level to POWGOAL column value
-                        send(GEN, ("SOUR:POW " + t_pow_temp));
-                        // wait before querying SA for response
-                        Thread.Sleep(relax);
-                        // read SA marker Y-value
-                        t_pow = query(SA, ":CALCulate:MARKer:Y?");
-                        log("marker y: " + t_pow);
-                        decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_dec);
-                        // calc diff between given goal pow and read pow
-                        err = t_pow_goal_dec - t_pow_dec;
-
-                        // new calibration point is measured pow + err
-                        t_pow_temp_dec += err;
-                        t_pow_temp = t_pow_temp_dec.ToString("0.00", CultureInfo.InvariantCulture);
-
-                        count++;
-                        relax += 50;
-                    }
-                    // measured pow, write down ERR
-                    relax = relax_temp;
-                    row["ERR"] = err.ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
-                    // add measured calibration point
-                    listCalData.Add(new CalPoint { freq = t_freq, pow = t_pow_goal, calPow = t_pow_temp.Replace('.', ',') });
-                    log("debug: new CalPoint: freq=" + t_freq + " pow:" + t_pow_goal + " calpow:" + t_pow_temp);
-                }
-                // write pow column, use cached data if already measured
-                row[powCol] = listCalData.Find(Cal_Point => Cal_Point.freq == t_freq && Cal_Point.pow == t_pow_goal).calPow;
-                log("debug: add CalPoint from list:" + row[powCol]);
-            }
-            send(SA, ":CAL:AUTO ON");     //включаем автокалибровку анализатора спектра
-            send(GEN, "OUTP:STAT OFF");   //выключаем генератор
-        }
-
-        public void cal_in_mix_DSB_down() {
-            // TODO: extract these to a separate class, remove dataTable, IN, OUT reassignment
+        public void calibrate(Action func) {
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
-            string IN = ((Instrument)comboIN.SelectedItem).Location;
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
-
-            //var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FRF", "PRF", "PRF-GOAL"));
-            calibrationTask = Task.Factory.StartNew(() => instrumentManager.calibrateIn(dataTable, IN, OUT, "FRF", "PRF", "PRF-GOAL"));
+            calibrationTask = Task.Factory.StartNew(func);
 
             dataGrid.ItemsSource = dataTable.AsDataView();
         }
 
-        public void cal_in_mix_DSB_up()
-        {
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-
-            string IN = ((Instrument)comboIN.SelectedItem).Location;
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
-
-            //var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FIF", "PIF", "PIF-GOAL"));
-            calibrationTask = Task.Factory.StartNew(() => instrumentManager.calibrateIn(dataTable, IN, OUT, "FIF", "PIF", "PIF-GOAL"));
-
-            dataGrid.ItemsSource = dataTable.AsDataView();
+        public void calibrateIN() {
+            calibrate(() => instrumentManager.calibrateInExec(dataTable, inParameters[measureMode]));
         }
 
-        public void cal_in_mix_SSB_down()
-        {
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-
-            string IN = ((Instrument)comboIN.SelectedItem).Location;
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
-
-            //var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FLSB", "PLSB", "PLSB-GOAL"));
-            calibrationTask = Task.Factory.StartNew(() => instrumentManager.calibrateIn(dataTable, IN, OUT, "FUSB", "PUSB", "PUSB-GOAL"));
-
-            dataGrid.ItemsSource = dataTable.AsDataView();
+        public void calibrateLO() {
+            calibrate(() => instrumentManager.calibrateLoExec(dataTable, loParameters));
         }
 
-        public void cal_in_mix_SSB_up()
-        {
-            log("warning: SSB UP calibration implemented in test mode");
-
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-
-            string IN = ((Instrument)comboIN.SelectedItem).Location;
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
-
-            // TODO: check colPow parameter ("PIF")
-            //var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FIF", "PIF", "PIF-GOAL"));
-            calibrationTask = Task.Factory.StartNew(() => instrumentManager.calibrateIn(dataTable, IN, OUT, "FIF", "PIF", "PIF-GOAL"));
-
-            dataGrid.ItemsSource = dataTable.AsDataView();
-        }
-
-        public void calibrateInMult(string GEN, string SA, string freqCol, string powCol, string powGoalCol) {
-            // TODO fix this crap
-            send(SA, ":CAL:AUTO OFF");
-            send(SA, ":SENS:FREQ:SPAN " + span.ToString());
-            send(SA, ":CALC:MARK1:MODE POS");
-            send(SA, ":POW:ATT " + attenuation.ToString());
-
-            List<CalPoint> listCalData = new List<CalPoint>();
-
-            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            //send(IN, ("SOUR:POW " + "-100"));
-            send(GEN, ("OUTP:STAT ON"));
-
-            foreach (DataRow row in dataTable.Rows) {
-                string t_freq = row[freqCol].ToString().Replace(',', '.');
-                string t_pow_goal = row[powGoalCol].ToString().Replace(',', '.');
-
-                if (string.IsNullOrEmpty(t_pow_goal) || t_pow_goal == "-" ||
-                    string.IsNullOrEmpty(t_freq) || t_freq == "-") {
-                    continue;
-                }
-
-                // is calibration point already measured?
-                bool exists = listCalData.Exists(Cal_Point =>
-                    Cal_Point.freq == t_freq && Cal_Point.pow == t_pow_goal);
-
-                if (!exists) {
-
-                    string t_pow = "";
-                    string t_pow_temp = "";
-                    decimal t_freq_dec = 0;
-                    decimal t_pow_dec = 0;
-                    decimal t_pow_goal_dec = 0;
-                    decimal t_pow_temp_dec = 0;
-                    decimal err = 1;
-
-                    decimal.TryParse(t_freq, NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_dec);
-                    t_freq = (t_freq_dec * 1000000000).ToString("0.00", CultureInfo.InvariantCulture);
-                    decimal.TryParse(t_pow_goal, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_goal_dec);
-                    t_pow_temp = t_pow_goal;
-                    t_pow_temp_dec = t_pow_goal_dec;
-
-                    send(GEN, ("SOUR:FREQ " + t_freq));
-                    send(SA, (":SENSe:FREQuency:RF:CENTer " + t_freq));
-                    send(SA, (":CALCulate:MARKer1:X:CENTer " + t_freq));
-                    int count = 0;
-                    int delay_temp = delay;
-                    while (count < 5 && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
-                        send(GEN, ("SOUR:POW " + t_pow_temp));
-                        Thread.Sleep(delay);
-                        t_pow = query(SA, ":CALCulate:MARKer:Y?");
-                        decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_dec);
-                        err = t_pow_goal_dec - t_pow_dec;
-                        row["ERR"] = err.ToString("0.00", CultureInfo.InvariantCulture);
-                        t_pow_temp_dec += err;
-                        t_pow_temp = t_pow_temp_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row[powCol] = t_pow_temp.Replace('.', ',');
-                        count++;
-                        delay += 50;
-                    }
-                    delay = delay_temp;
-                    //if (Math.Abs(err) > 10) { MessageBox.Show("Calibration error. Please check amplitude reference level on the alayzer"); }
-
-                    // add measured calibration point
-                    listCalData.Add(new CalPoint { freq = t_freq, pow = t_pow_goal, calPow = t_pow_temp.Replace('.', ',') });
-                    log("debug: new CalPoint: freq=" + t_freq + " pow:" + t_pow_goal + " calpow:" + t_pow_temp);
-                }
-                // write pow column, use cached data if already measured
-                row[powCol] = listCalData.Find(Cal_Point => Cal_Point.freq == t_freq && Cal_Point.pow == t_pow_goal).calPow;
-                log("debug: add CalPoint from list:" + row[powCol]);
-            }
-            send(SA, ":CAL:AUTO ON");
-            send(GEN, ("OUTP:STAT OFF"));
-        }
-
-        public void cal_in_mult() {
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-
-            string IN = ((Instrument)comboIN.SelectedItem).Location;
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
-
-            var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FH1", "PIN-GEN", "PIN-GOAL"));
-
-            dataGrid.ItemsSource = dataTable.AsDataView();
-        }
-
-        public string getAttenuationError(DataRow row, string IN, string OUT, string freqCol, string errCol) {
-            string t_freq = "";
-            string t_pow = "";
-            string err_str = "";
-            decimal err = 0;
-            decimal t_freq_dec = 0;
-            decimal t_pow_dec = 0;
-
-            decimal t_pow_goal_dec = -20;
-
-            t_freq = row[freqCol].ToString();
-            err_str = row[errCol].ToString();   // not used?
-            // TODO: error handling
-            // TODO: extract freq to match with mult out calibration?
-            if (!(string.IsNullOrEmpty(t_freq)) && err_str != "-") {    // err_str should be t_freq?
-                decimal.TryParse(t_freq.Replace(',', '.'), NumberStyles.Any, 
-                                 CultureInfo.InvariantCulture, out t_freq_dec);
-                t_freq = (t_freq_dec * 1000000000).ToString("0.000", CultureInfo.InvariantCulture);
-                send(IN, ("SOUR:FREQ " + t_freq));
-                send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq));
-                send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq));
-                Thread.Sleep(delay);
-                t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_dec);
-                err = t_pow_goal_dec - t_pow_dec;
-                err_str = err.ToString("0.000", CultureInfo.InvariantCulture);
-                //row[errCol] = err_str.Replace('.', ',');
-                return err_str.Replace('.', ',');
-            }
-            return "-";
-        }
-
-        public void cal_out_mix_DSB() {
-            if (!canCalibrateIN_OUT()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
-
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-
-            string IN = ((Instrument)comboIN.SelectedItem).Location;
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
-            
-            send(OUT, ":CAL:AUTO OFF");
-            send(OUT, ":SENS:FREQ:SPAN " + span.ToString());
-            send(OUT, ":CALC:MARK1:MODE POS");
-            send(OUT, ":POW:ATT " + attenuation.ToString());
-            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            //send(IN, ("SOUR:POW " + "-100"));
-            send(IN, ("OUTP:STAT ON"));
-
-            foreach (DataRow row in dataTable.Rows) {
-                // TODO: no need to repeat pow setup?
-                string t_pow_temp = "-20";
-                send(IN, ("SOUR:POW " + t_pow_temp));
-
-                //ATT-IF
-                row["ATT-IF"] = getAttenuationError(row, IN, OUT, "FIF", "ATT-IF");
-
-                //ATT-RF
-                row["ATT-RF"] = getAttenuationError(row, IN, OUT, "FRF", "ATT-RF");
-
-                //ATT-LO
-                row["ATT-LO"] = getAttenuationError(row, IN, OUT, "FLO", "ATT-LO");
-                //if (Math.Abs(err) > 3) { MessageBox.Show("Calibration error. Please check amplitude reference level on alayzer"); }
-            }
-            send(IN, ("OUTP:STAT OFF"));
-            send(OUT, ":CAL:AUTO ON");
-            dataGrid.ItemsSource = dataTable.AsDataView();
-        }
-
-        public void cal_out_mix_SSB() {
-            if (!canCalibrateIN_OUT()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
-
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-
-            string IN = ((Instrument)comboIN.SelectedItem).Location;
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
-
-            send(OUT, ":CAL:AUTO OFF");
-            send(OUT, ":SENS:FREQ:SPAN span");
-            send(OUT, ":CALC:MARK1:MODE POS");
-            send(OUT, ":POW:ATT " + attenuation.ToString());
-            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            //send(IN, ("SOUR:POW " + "-100"));
-            send(IN, ("OUTP:STAT ON"));
-
-            foreach (DataRow row in dataTable.Rows) {
-                string t_pow_temp = "-20";
-                send(IN, ("SOUR:POW " + t_pow_temp));
-
-                //ATT-IF
-                row["ATT-IF"] = getAttenuationError(row, IN, OUT, "FIF", "ATT-IF");
-
-                //ATT-LSB
-                row["ATT-LSB"] = getAttenuationError(row, IN, OUT, "FLSB", "ATT-LSB");
-
-                //ATT-USB
-                row["ATT-USB"] = getAttenuationError(row, IN, OUT, "FUSB", "ATT-USB");
-
-                //ATT-LO
-                row["ATT-LO"] = getAttenuationError(row, IN, OUT, "FLO", "ATT-LO");
-                //if (Math.Abs(err) > 3) { MessageBox.Show("Calibration error. Please check amplitude reference level on alayzer"); }
-            }
-            send(IN, ("OUTP:STAT OFF"));
-            send(OUT, ":CAL:AUTO ON");
-            dataGrid.ItemsSource = dataTable.AsDataView();
-        }
-
-        public string getMultAttenuationError(DataRow row, string IN, string OUT, string errCol, decimal t_freq_dec) {
-            string t_freq = "";
-            string t_pow = "";
-            string err_str = "";
-            decimal err = 0;
-            decimal t_pow_dec = 0;
-
-            decimal t_pow_goal_dec = -20;
-
-            err_str = row[errCol].ToString();
-            if (t_freq_dec * 1000000000 < maxfreq * 1000000 && err_str != "-") {
-                t_freq = (t_freq_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-                send(IN, ("SOUR:FREQ " + t_freq));
-                send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq));
-                send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq));
-                Thread.Sleep(delay);
-                t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_dec);
-                err = t_pow_goal_dec - t_pow_dec;
-                err_str = err.ToString("0.000", CultureInfo.InvariantCulture);
-                return err_str.Replace('.', ',');
-            }
-            return "-";
-        }
-
-        public void cal_out_mult() {
-            if (!canCalibrateIN_OUT()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
-
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-
-            string IN = ((Instrument)comboIN.SelectedItem).Location;
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;
-
-            send(OUT, ":CAL:AUTO OFF");
-            send(OUT, ":SENS:FREQ:SPAN span");
-            send(OUT, ":CALC:MARK1:MODE POS");
-            send(OUT, ":POW:ATT " + attenuation.ToString());
-            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            //send(IN, ("SOUR:POW " + "-100"));
-            send(IN, ("OUTP:STAT ON"));
-
-            foreach (DataRow row in dataTable.Rows) {
-                string t_pow_temp = "-20";
-                string t_freq = "";
-                decimal t_freq_dec = 0;
-
-                send(IN, ("SOUR:POW " + t_pow_temp));
-
-                t_freq = row["FH1"].ToString();
-                // TODO: error handling, combine into one TryParseBlock
-                if (string.IsNullOrEmpty(t_freq) || t_freq == "-") {
-                    continue;
-                }
-                decimal.TryParse(t_freq.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_dec);
-
-                //ATT-H1                
-                row["ATT-H1"] = getMultAttenuationError(row, IN, OUT, "ATT-H1", t_freq_dec);
-
-                //ATT-H2
-                row["ATT-H2"] = getMultAttenuationError(row, IN, OUT, "ATT-H2", t_freq_dec);
-
-                //ATT-H3
-                row["ATT-H3"] = getMultAttenuationError(row, IN, OUT, "ATT-H3", t_freq_dec);
-
-                //ATT-H4
-                row["ATT-H4"] = getMultAttenuationError(row, IN, OUT, "ATT-H4", t_freq_dec);          
-            }
-            send(IN, ("OUTP:STAT OFF"));
-            send(OUT, ":CAL:AUTO ON");
-            dataGrid.ItemsSource = dataTable.AsDataView();
-        }
-
-        public void cal_LO() {
-            if (!canCalibrateLO()) return;
-
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-
-            string IN = ((Instrument)comboLO.SelectedItem).Location;//считываем инструмент
-            string OUT = ((Instrument)comboOUT.SelectedItem).Location;//считываем инструмент
-
-            var task = Task.Factory.StartNew(() => calibrateIn(IN, OUT, "FLO", "PLO", "PLO-GOAL"));
-
-            dataGrid.ItemsSource = dataTable.AsDataView();
+        public void calibrateOUT() {
+            calibrate(() => instrumentManager.calibrateOutExec(dataTable, measureMode));
         }
 
         #endregion regCalibrationManager
