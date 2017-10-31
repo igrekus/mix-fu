@@ -190,14 +190,17 @@ namespace Mix_Fu
         // comboboxes
         private void comboIN_SelectionChanged(object sender, SelectionChangedEventArgs e) {
             instrumentManager.m_IN = (Instrument)((ComboBox)sender).SelectedItem;
+            log(instrumentManager.m_IN.ToString(), true);
         }
 
         private void comboOUT_SelectionChanged(object sender, SelectionChangedEventArgs e) {
             instrumentManager.m_OUT = (Instrument)((ComboBox)sender).SelectedItem;
+            log(instrumentManager.m_OUT.ToString(), true);
         }
 
         private void comboLO_SelectionChanged(object sender, SelectionChangedEventArgs e) {
             instrumentManager.m_LO = (Instrument)((ComboBox)sender).SelectedItem;
+            log(instrumentManager.m_LO.ToString(), true);
         }
 
         // misc buttons
@@ -221,9 +224,9 @@ namespace Mix_Fu
             comboOUT.Items.Refresh();
             comboLO.Items.Refresh();
 
-            comboIN.SelectedIndex = 0;
+            comboIN.SelectedIndex = 2;
             comboOUT.SelectedIndex = 1;
-            comboLO.SelectedIndex = 2;
+            comboLO.SelectedIndex = 0;
         }
 
         private void btnRunQueryClicked(object sender, RoutedEventArgs e) {

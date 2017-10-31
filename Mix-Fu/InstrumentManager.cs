@@ -45,37 +45,40 @@ namespace Mix_Fu {
             m_LO = LO;
         }
 
-        public void send(string location, string com) {
-            //// live
-            //try {
-            //    using (AgSCPI99 instrument = new AgSCPI99(location)) {
-            //        instrument.Transport.Command.Invoke(com);
-            //    }
-            //}
-            //catch (Exception ex) {
-            //    throw ex;
-            //}
+        public void send(string location, string command) {
+            log("debug: send: " + command + " to: " + location, true);
+            // live
+            try
+            {
+                using (AgSCPI99 instrument = new AgSCPI99(location)) {
+                    instrument.Transport.Command.Invoke(command);
+                }
+            }
+            catch (Exception ex) {
+                throw ex;
+            }
 
-            // mock
-            log("send: " + com + " to: " + location, false);
+            //// mock
+            //log("send: " + command + " to: " + location, false);
         }
 
         public string query(string location, string question) {
-            //// live
-            //string answer = "";
-            //try {
-            //    using (AgSCPI99 instrument = new AgSCPI99(location)) {
-            //        instrument.Transport.Query.Invoke(question, out answer);
-            //    }
-            //}
-            //catch (Exception ex) {
-            //    throw ex;
-            //}
-            //return answer;
+            // live
+            log("debug: query: " + question + " to: " + location, true);
+            string answer = "";
+            try {
+                using (AgSCPI99 instrument = new AgSCPI99(location)) {
+                    instrument.Transport.Query.Invoke(question, out answer);
+                }
+            }
+            catch (Exception ex) {
+                throw ex;
+            }
+            return answer;
 
-            // mock
-            log("query: " + question + " to: " + location, false);
-            return "-25.5"; // TODO: test diff value
+            //// mock
+            //log("query: " + question + " to: " + location, false);
+            //return "-25.5"; // TODO: test diff value
         }
 
         public void searchInstruments(List<Instrument> instruments, int maxPort, int gpib) {
@@ -105,26 +108,27 @@ namespace Mix_Fu {
 
         public void prepareCalibrateIn() {
             // TODO: check SA & GEN assignment logic
-            string SA = m_IN.Location;
-            string GEN = m_OUT.Location;
+            string SA = m_OUT.Location;
+            string GEN = m_IN.Location;
 
             send(SA, ":CAL:AUTO OFF");                       // выключаем автокалибровку анализатора спектра
             send(SA, ":SENS:FREQ:SPAN " + span.ToString());  // выставляем спан
             send(SA, ":CALC:MARK1:MODE POS");                // выставляем режим маркера
             send(GEN, "OUTP:STAT ON");                       // включаем генератор (redundant parenthesis around "")            
+            // TODO: send GEN modulation off
         }
 
         public void releaseInstrument() {
             // TODO: check SA & GEN assignment logic
-            string SA = m_IN.Location;
-            string GEN = m_OUT.Location;
+            string SA = m_OUT.Location;
+            string GEN = m_IN.Location;
 
             send(SA, ":CAL:AUTO ON");     //включаем автокалибровку анализатора спектра
             send(GEN, "OUTP:STAT OFF");   //выключаем генератор
         }
 
         public void calibrateIn(DataTable dataTable, string GEN, string SA, string freqCol, string powCol, string powGoalCol) {
-            log("start calibrate IN", false);
+            log("start calibrate " + "IN=" + GEN + " OUT=" + SA, false);
             prepareCalibrateIn();
 
             List<CalPoint> listCalData = new List<CalPoint>();
@@ -150,13 +154,13 @@ namespace Mix_Fu {
                     log("error: fail parsing " + inPowGoalStr, false);
                     continue;
                 }
-                inFreqDec *= 1000000;
+                inFreqDec *= 1000000000;
 
                 bool exists = listCalData.Exists(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
 
                 log("debug: calibrate: freq=" + inFreqDec + 
                                     " pgoal=" + inPowGoalDec + 
-                                   " exists=" + exists, false);
+                                   " exists=" + exists, true);
 
                 if (!exists) {
                     decimal tempPowDec = inPowGoalDec;
@@ -176,6 +180,7 @@ namespace Mix_Fu {
                         string readPow = query(SA, ":CALCulate:MARKer:Y?");
                         decimal.TryParse(readPow, NumberStyles.Any, 
                                          CultureInfo.InvariantCulture, out readPowDec);
+                        log("marker data:" + readPow + " " + readPowDec, true);
 
                         err = inPowGoalDec - readPowDec;
                         tempPowDec += err;
@@ -189,7 +194,7 @@ namespace Mix_Fu {
                                                    calPowD = tempPowDec,
                                                    error = err });
                     
-                    log("debug: new " + listCalData.Last().ToString(), false);
+                    log("debug: new " + listCalData.Last().ToString(), true);
                 }
                 CalPoint updatedPoint = listCalData.Find(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
                 // ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
@@ -238,7 +243,7 @@ namespace Mix_Fu {
 
                 log("debug: calibrate: freq=" + inFreqDec +
                                     " pgoal=" + inPowGoalDec +
-                                   " exists=" + exists, false);
+                                   " exists=" + exists, true);
 
                 if (!exists) {
                     decimal tempPowDec = inPowGoalDec;
@@ -270,7 +275,7 @@ namespace Mix_Fu {
                                                     powD = inPowGoalDec,
                                                  calPowD = tempPowDec,
                                                    error = err });
-                    log("debug: new " + listCalData.Last().ToString(), false);
+                    log("debug: new " + listCalData.Last().ToString(), true);
                 }
                 CalPoint updatedPoint = listCalData.Find(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
                 // ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
