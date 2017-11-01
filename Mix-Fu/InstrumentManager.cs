@@ -1,4 +1,6 @@
-﻿using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
+﻿#define mock
+
+using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -11,7 +13,17 @@ using System.Windows;
 
 namespace Mix_Fu {
 
+    public struct ParameterStruct {
+        public string colFreq;
+        public string colPow;
+        public string colPowGoal;
+    }
+
     class InstrumentManager {
+        // parameter lists
+        public Dictionary<MeasureMode, List<Tuple<string, string>>> outParameters = null;
+        public Dictionary<MeasureMode, ParameterStruct> inParameters = null;
+        public ParameterStruct loParameters;
 
         // TODO: make instrument classes: Generator, Analyser, hide queries there into methods
         public Instrument m_IN { get; set; }
@@ -27,6 +39,7 @@ namespace Mix_Fu {
 
         public InstrumentManager(Action<string, bool> logger) {
             log = logger;
+            initParameterLists();
         }
 
         public InstrumentManager(Action<string, bool> logger, Instrument IN, Instrument OUT, Instrument LO) {
@@ -34,6 +47,45 @@ namespace Mix_Fu {
             m_OUT = OUT;
             m_LO = LO;
             log = logger;
+            initParameterLists();
+        }
+
+        private void initParameterLists() {
+            // INcalibration parameters
+            inParameters = new Dictionary<MeasureMode, ParameterStruct>();
+            inParameters.Add(MeasureMode.modeDSBDown, new ParameterStruct { colFreq = "FRF", colPow = "PRF", colPowGoal = "PRF-GOAL" });
+            inParameters.Add(MeasureMode.modeDSBUp, new ParameterStruct { colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL" });
+            inParameters.Add(MeasureMode.modeSSBDown, new ParameterStruct { colFreq = "FUSB", colPow = "PUSB", colPowGoal = "PUSB-GOAL" });
+            inParameters.Add(MeasureMode.modeSSBUp, new ParameterStruct { colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL" });
+            inParameters.Add(MeasureMode.modeMultiplier, new ParameterStruct { colFreq = "FH1", colPow = "PIN", colPowGoal = "PIN-GOAL" });
+
+            // LO calibration parameters
+            loParameters = new ParameterStruct { colFreq = "FLO", colPow = "PLO", colPowGoal = "PLO-GOAL" };
+
+            // OUT calibration parameters
+            outParameters = new Dictionary<MeasureMode, List<Tuple<string, string>>>();
+
+            List<Tuple<string, string>> dsbdownup = new List<Tuple<string, string>>();
+            dsbdownup.Add(new Tuple<string, string>("FIF", "ATT-IF"));
+            dsbdownup.Add(new Tuple<string, string>("FRF", "ATT-RF"));
+            dsbdownup.Add(new Tuple<string, string>("FLO", "ATT-LO"));
+            outParameters.Add(MeasureMode.modeDSBDown, dsbdownup);
+            outParameters.Add(MeasureMode.modeDSBUp, dsbdownup);
+
+            List<Tuple<string, string>> ssbdownup = new List<Tuple<string, string>>();
+            ssbdownup.Add(new Tuple<string, string>("FIF", "ATT-IF"));
+            ssbdownup.Add(new Tuple<string, string>("FLSB", "ATT-LSB"));
+            ssbdownup.Add(new Tuple<string, string>("FUSB", "ATT-USB"));
+            ssbdownup.Add(new Tuple<string, string>("FLO", "ATT-LO"));
+            outParameters.Add(MeasureMode.modeSSBDown, ssbdownup);
+            outParameters.Add(MeasureMode.modeSSBUp, ssbdownup);
+
+            List<Tuple<string, string>> multiplier = new List<Tuple<string, string>>();
+            multiplier.Add(new Tuple<string, string>("FH1", "ATT-H1"));
+            multiplier.Add(new Tuple<string, string>("FH1", "ATT-H2"));
+            multiplier.Add(new Tuple<string, string>("FH1", "ATT-H3"));
+            multiplier.Add(new Tuple<string, string>("FH1", "ATT-H4"));
+            outParameters.Add(MeasureMode.modeMultiplier, multiplier);
         }
 
         public void setInstruments(Instrument IN, Instrument OUT, Instrument LO) {
@@ -42,46 +94,49 @@ namespace Mix_Fu {
             m_LO = LO;
         }
 
+#if mock
         public void send(string location, string command) {
-            //log("debug: send: " + command + " to: " + location, true);
-            //// live
-            //try
-            //{
-            //    using (AgSCPI99 instrument = new AgSCPI99(location)) {
-            //        instrument.Transport.Command.Invoke(command);
-            //    }
-            //}
-            //catch (Exception ex) {
-            //    throw ex;
-            //}
-
-            // mock
             log("send: " + command + " to: " + location, true);
         }
-
         public string query(string location, string question) {
-            //// live
-            //log("debug: query: " + question + " to: " + location, true);
-            //string answer = "";
-            //try {
-            //    using (AgSCPI99 instrument = new AgSCPI99(location)) {
-            //        instrument.Transport.Query.Invoke(question, out answer);
-            //    }
-            //}
-            //catch (Exception ex) {
-            //    throw ex;
-            //}
-            //return answer;
-
-            // mock
             log("query: " + question + " to: " + location, true);
-            return "-25.5"; // TODO: test diff value
+            return "-24.9";
         }
-
-        public void searchInstruments(List<Instrument> instruments, int maxPort, int gpib) {
+#else
+        public void send(string location, string command) {
+            log("debug: send: " + command + " to: " + location, true);
+            try {
+                using (AgSCPI99 instrument = new AgSCPI99(location)) {
+                    instrument.Transport.Command.Invoke(command);
+                }
+            }
+            catch (Exception ex) {
+                throw ex;
+            }
+        }
+        public string query(string location, string question) {
+            log("debug: query: " + question + " to: " + location, true);
+            string answer = "";
+            try {
+                using (AgSCPI99 instrument = new AgSCPI99(location)) {
+                    instrument.Transport.Query.Invoke(question, out answer);
+                }
+            }
+            catch (Exception ex) {
+                throw ex;
+            }
+            return answer;
+        }
+#endif
+        public void searchInstruments(List<Instrument> instruments, int maxPort, int gpib, CancellationToken token) {
             log("start instrument search...", false);
 
             for (int i = 0; i <= maxPort; i++) {
+                if (token.IsCancellationRequested) {
+                    log("error: aborted on user request", false);
+                    token.ThrowIfCancellationRequested();
+                    return;
+                }
                 string location = "GPIB" + gpib.ToString() + "::" + i.ToString() + "::INSTR";
                 log("try " + location, false);
 
@@ -106,7 +161,7 @@ namespace Mix_Fu {
             send(SA, ":CAL:AUTO OFF");                       // выключаем автокалибровку анализатора спектра
             send(SA, ":SENS:FREQ:SPAN " + span.ToString());  // выставляем спан
             send(SA, ":CALC:MARK1:MODE POS");                // выставляем режим маркера
-            send(GEN, "OUTP:STAT ON");                       // включаем генератор (redundant parenthesis around "")            
+            send(GEN, "OUTP:STAT ON");                       // включаем генератор
             send(SA, ":POW:ATT " + attenuation.ToString());
             //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
             //send(IN, "SOUR:POW " + "-100");
@@ -115,7 +170,7 @@ namespace Mix_Fu {
         }
 
         private void setupSA(string GEN, string SA, decimal inFreqDec) {
-            // TODO: bind to instroment properties
+            // TODO: bind to instrument properties
             // TODO: exception handling
             send(GEN, "SOUR:FREQ " + inFreqDec);
             send(SA, ":SENSe:FREQuency:RF:CENTer " + inFreqDec);
@@ -128,7 +183,7 @@ namespace Mix_Fu {
             send(GEN, "OUTP:STAT OFF");   //выключаем генератор
         }
 
-        public void calibrateInExec(DataTable data, ParameterStruct paramDict) {
+        public void calibrateIn(DataTable data, ParameterStruct paramDict, CancellationToken token) {
             // TODO: exception handling
             // TODO: split into methods
             string GEN = m_IN.Location;
@@ -137,7 +192,7 @@ namespace Mix_Fu {
             log("start calibrate IN: " + "GEN=" + GEN + " SA=" + SA, false);
             prepareInstrument(GEN, SA);
 
-            List<CalibrationPoint> listCalData = new List<CalibrationPoint>();
+            var cache = new Dictionary<Tuple<decimal, decimal>, Tuple<decimal, decimal>>();
 
             foreach (DataRow row in data.Rows) {
                 string inFreqStr = row[paramDict.colFreq].ToString().Replace(',', '.');
@@ -152,23 +207,21 @@ namespace Mix_Fu {
                 decimal inPowGoalDec = 0;
                 if (!decimal.TryParse(inFreqStr, NumberStyles.Any, CultureInfo.InvariantCulture,
                                       out inFreqDec)) {
-                    log("error: fail parsing " + inFreqStr, false);
+                    log("error: fail parsing " + inFreqStr + ", skipping", false);
                     continue;
                 }
                 if (!decimal.TryParse(inPowGoalStr, NumberStyles.Any, CultureInfo.InvariantCulture,
                                       out inPowGoalDec)) {
-                    log("error: fail parsing " + inPowGoalStr, false);
+                    log("error: fail parsing " + inPowGoalStr + ", skipping", false);
                     continue;
                 }
                 inFreqDec *= Constants.GHz;
 
-                bool exists = listCalData.Exists(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
+                log("debug: calibrate: freq=" + inFreqDec + " pgoal=" + inPowGoalDec, true);
 
-                log("debug: calibrate: freq=" + inFreqDec + 
-                                    " pgoal=" + inPowGoalDec + 
-                                   " exists=" + exists, true);
+                var freqPowPair = Tuple.Create(inFreqDec, inPowGoalDec);
 
-                if (!exists) {
+                if (!cache.ContainsKey(freqPowPair)) {
                     decimal tempPowDec = inPowGoalDec;
                     decimal err = 1;
 
@@ -188,38 +241,30 @@ namespace Mix_Fu {
 
                         err = inPowGoalDec - readPowDec;
                         tempPowDec += err;
-
+                        
                         ++count;
                         delay += 50;
                     }
                     delay = tmpDelay;
-                    listCalData.Add(new CalibrationPoint {
-                        freqD = inFreqDec,
-                        powD = inPowGoalDec,
-                        calPowD = tempPowDec,
-                        error = err
-                    });
-
-                    log("debug: new " + listCalData.Last().ToString(), true);
+                    cache.Add(freqPowPair, Tuple.Create(tempPowDec, err));
                 }
-                CalibrationPoint updatedPoint = listCalData.Find(point => point.freqD == inFreqDec && point.powD == inPowGoalDec);
+                var powErrPair = cache[freqPowPair];
                 // ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
-                row["ERR"] = updatedPoint.error.ToString(Constants.decimalFormat).Replace('.', ',');
-                row[paramDict.colPow] = updatedPoint.calPowD.ToString(Constants.decimalFormat).Replace('.', ',');
+                row[paramDict.colPow] = powErrPair.Item1.ToString(Constants.decimalFormat).Replace('.', ',');
+                row["ERR"] = powErrPair.Item2.ToString(Constants.decimalFormat).Replace('.', ',');
             }
             releaseInstrument(GEN, SA);
             log("end calibrate IN", false);
         }
 
-        public void calibrateLoExec(DataTable data, ParameterStruct paramDict) {
+        public void calibrateLo(DataTable data, ParameterStruct paramDict, CancellationToken token) {
             Instrument tmpIn = m_IN;
             m_IN = m_LO;
-            calibrateInExec(data, paramDict);
+            calibrateIn(data, paramDict, token);
             m_IN = tmpIn;
         }
 
         public string getAttenuationError(string GEN, string SA, string freq, decimal powGoal, int harmonic = 1) {
-            // TODO: refactor to match with in-lo calibration?            
             if (string.IsNullOrEmpty(freq) || freq == "-") {
                 return "-";
             }
@@ -249,7 +294,7 @@ namespace Mix_Fu {
             return errDec.ToString("0.000", CultureInfo.InvariantCulture).Replace('.', ',');
         }
 
-        public void calibrateOutExec(DataTable data, MeasureMode mode) {
+        public void calibrateOut(DataTable data, List<Tuple<string, string>> parameters, MeasureMode mode) {
             string GEN = m_IN.Location;
             string SA = m_OUT.Location;
 
@@ -260,36 +305,22 @@ namespace Mix_Fu {
             decimal tempPow = (decimal)-20.00;
             send(GEN, "SOUR:POW " + tempPow);
 
-            List<Tuple<string, string>> paramList = new List<Tuple<string, string>>();
-
-            // TODO: make parameter dict
-            switch (mode) {
-            case MeasureMode.modeDSBDown:
-            case MeasureMode.modeDSBUp:
-                paramList.Add(new Tuple<string, string>("FIF", "ATT-IF"));
-                paramList.Add(new Tuple<string, string>("FRF", "ATT-RF"));
-                paramList.Add(new Tuple<string, string>("FLO", "ATT-LO"));
-                break;
-            case MeasureMode.modeSSBDown:
-            case MeasureMode.modeSSBUp:
-                paramList.Add(new Tuple<string, string>("FIF", "ATT-IF"));
-                paramList.Add(new Tuple<string, string>("FLSB", "ATT-LSB"));
-                paramList.Add(new Tuple<string, string>("FUSB", "ATT-USB"));
-                paramList.Add(new Tuple<string, string>("FLO", "ATT-LO"));
-                break;
-            case MeasureMode.modeMultiplier:
-                paramList.Add(new Tuple<string, string>("FH1", "ATT-H1"));
-                paramList.Add(new Tuple<string, string>("FH1", "ATT-H2"));
-                paramList.Add(new Tuple<string, string>("FH1", "ATT-H3"));
-                paramList.Add(new Tuple<string, string>("FH1", "ATT-H4"));
-                break;
-            default:
-                return;
-            }
+            var cache = new Dictionary<string, string>();
 
             foreach (DataRow row in data.Rows) {
-                foreach (Tuple<string, string> p in paramList) {
-                    row[p.Item2] = getAttenuationError(GEN, SA, row[p.Item1].ToString(), tempPow, 4);
+                int harmonic = 1;   // hack
+                foreach (Tuple<string, string> p in parameters) {
+                    string freq = row[p.Item1].ToString();
+
+                    if (!cache.ContainsKey(freq)) {
+                        cache.Add(freq, getAttenuationError(GEN, SA, row[p.Item1].ToString(), tempPow, harmonic));
+                    }
+
+                    row[p.Item2] = cache[freq];
+
+                    if (mode == MeasureMode.modeMultiplier) { 
+                        ++harmonic;
+                    }
                 }
             }
 
