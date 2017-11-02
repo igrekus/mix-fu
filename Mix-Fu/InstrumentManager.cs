@@ -11,6 +11,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
+// TODO: catch axception on calibration fail
+
 namespace Mix_Fu {
 
     public struct ParameterStruct {
@@ -161,15 +163,14 @@ namespace Mix_Fu {
             send(SA, ":CAL:AUTO OFF");                       // выключаем автокалибровку анализатора спектра
             send(SA, ":SENS:FREQ:SPAN " + span.ToString());  // выставляем спан
             send(SA, ":CALC:MARK1:MODE POS");                // выставляем режим маркера
+            send(SA, ":POW:ATT " + attenuation.ToString());  // выставляем аттенюацию
             send(GEN, "OUTP:STAT ON");                       // включаем генератор
-            send(SA, ":POW:ATT " + attenuation.ToString());
             //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            //send(IN, "SOUR:POW " + "-100");
 
             // TODO: send GEN modulation off
         }
 
-        private void setupSA(string GEN, string SA, decimal inFreqDec) {
+        private void setCalibrationFreq(string GEN, string SA, decimal inFreqDec) {
             // TODO: bind to instrument properties
             // TODO: exception handling
             send(GEN, "SOUR:FREQ " + inFreqDec);
@@ -192,6 +193,7 @@ namespace Mix_Fu {
             log("start calibrate IN: " + "GEN=" + GEN + " SA=" + SA, false);
             prepareInstrument(GEN, SA);
 
+            // TODO: if performance issue, write own key class, override Equals() and GetHash()
             var cache = new Dictionary<Tuple<decimal, decimal>, Tuple<decimal, decimal>>();
 
             foreach (DataRow row in data.Rows) {
@@ -225,16 +227,28 @@ namespace Mix_Fu {
                     decimal tempPowDec = inPowGoalDec;
                     decimal err = 1;
 
-                    setupSA(GEN, SA, inFreqDec);
+                    try {
+                        setCalibrationFreq(GEN, SA, inFreqDec);
+                    }
+                    catch (Exception ex) {
+                        log("error: fail setting freq, skipping: " + inFreqDec + " message: " + ex.Message, false);
+                        continue;
+                    }
 
                     int count = 0;
                     int tmpDelay = delay;
                     while (count < 5 && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
-                        decimal readPowDec = 0;
-                        send(GEN, "SOUR:POW " + tempPowDec);
+                        // TODO: exception handling
+                        try {
+                            send(GEN, "SOUR:POW " + tempPowDec);
+                        }
+                        catch (Exception ex) {
+                            log("error: fail setting pow, skipping: " + tempPowDec + " message: " + ex.Message, false);
+                        }
                         Thread.Sleep(delay);
                         // TODO: inline readPow
                         string readPow = query(SA, ":CALCulate:MARKer:Y?");
+                        decimal readPowDec = 0;
                         decimal.TryParse(readPow, NumberStyles.Any,
                                          CultureInfo.InvariantCulture, out readPowDec);
                         log("read data:" + readPow + " " + readPowDec, true);
@@ -282,7 +296,7 @@ namespace Mix_Fu {
                 return "-";
             }
 
-            setupSA(GEN, SA, inFreqDec * harmonic);
+            setCalibrationFreq(GEN, SA, inFreqDec * harmonic);
             Thread.Sleep(delay);
 
             string readPow = query(SA, ":CALCulate:MARKer:Y?");
@@ -290,6 +304,8 @@ namespace Mix_Fu {
             decimal readPowDec = 0;
             decimal.TryParse(readPow, NumberStyles.Any, CultureInfo.InvariantCulture, out readPowDec);
             decimal errDec = powGoal - readPowDec;
+
+            if (errDec < 0) errDec = 0;
 
             return errDec.ToString("0.000", CultureInfo.InvariantCulture).Replace('.', ',');
         }
