@@ -1,4 +1,4 @@
-﻿#define mock
+﻿//#define mock
 
 using System;
 using System.IO;
@@ -16,9 +16,9 @@ using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 using Agilent.CommandExpert.ScpiNet.Ag34410_2_35;
 using Agilent.CommandExpert.ScpiNet.Ag90x0_SA_A_08_03;
 using System.Diagnostics;
+using System.Xml.Resolvers;
 
-namespace Mix_Fu
-{
+namespace Mix_Fu {
     public struct Constants {
         public const string decimalFormat = "0.00";
         public const int GHz = 1000000000;
@@ -72,8 +72,9 @@ namespace Mix_Fu
         NumberStyles style = NumberStyles.Any;
         CultureInfo culture = CultureInfo.InvariantCulture;
 
-        Task searchTask;
-        Task calibrationTask;
+        private Task searchTask;
+        private Task calibrationTask;
+        private Task measureTask;
 
         InstrumentManager instrumentManager = null;
 
@@ -177,8 +178,6 @@ namespace Mix_Fu
 
         // misc buttons
         private async void btnSearchClicked(object sender, RoutedEventArgs e) {
-            Console.WriteLine("debug test");
-            Debug.Write("debug");
             if (searchTask != null && !searchTask.IsCompleted) {
                 MessageBox.Show("Instrument search is already running.");
                 return;
@@ -254,47 +253,51 @@ namespace Mix_Fu
         }
 
         // data buttons
+        // TODO: rewrite data handling
         private void btnImportXlsxClicked(object sender, RoutedEventArgs e)
         {
-            Microsoft.Win32.OpenFileDialog openFileDialog = new Microsoft.Win32.OpenFileDialog();
-            openFileDialog.Multiselect = false;
-            openFileDialog.Filter = "xlsx файлы (*.xlsx)|*.xlsx|Все файлы (*.*)|*.*";
-            if ((bool)openFileDialog.ShowDialog()) {
-                try {
-                    if ((xlsx_path = openFileDialog.FileName) != null) {
-                        dataTable = getDataTableFromExcel(xlsx_path);
-                        dataGrid.ItemsSource = dataTable.AsDataView();
-                    } else { return; }
-                }
-                catch (Exception ex) {
-                    MessageBox.Show("Error: can't open file, check log");
-                    log("error: " + ex.Message);
-                }
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Multiselect = false,
+                Filter = "xlsx файлы (*.xlsx)|*.xlsx|Все файлы (*.*)|*.*"
+            };
+            // TODO: exception handling
+            if (!(bool)openFileDialog.ShowDialog()) {
+                return;
+            }
+            xlsx_path = openFileDialog.FileName;
+            try {
+                dataTable = getDataTableFromExcel(xlsx_path);
+                dataGrid.ItemsSource = dataTable.AsDataView();
+            }
+            catch (Exception ex) {
+                MessageBox.Show("Error: can't open file, check log");
+                log("error: " + ex.Message);
             }
         }
 
         private void btnSaveXlsxClicked(object sender, RoutedEventArgs e) {
-            Microsoft.Win32.SaveFileDialog saveFileDialog = new Microsoft.Win32.SaveFileDialog();
-            saveFileDialog.Filter = "Таблица (*.xlsx)|*.xlsx|Все файлы (*.*)|*.*";
-            if ((bool)saveFileDialog.ShowDialog()) {
-                FileInfo xlsx_file = new FileInfo(saveFileDialog.FileName);
-                using (ExcelPackage package = new ExcelPackage(xlsx_file)) {
-                    dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
-                    ExcelWorksheet ws = package.Workbook.Worksheets.Add("1");
-                    ws.Cells ["A1"].LoadFromDataTable(dataTable, true);
-
-                    foreach (var cell in ws.Cells) {
-                        cell.Value = cell.Value.ToString().Replace(',', '.');
-                        try {
-                            cell.Value = Convert.ToDecimal(cell.Value);
-                        }
-                        catch {
-                            cell.Style.Font.Bold = true;
-                        };
+            var saveFileDialog = new Microsoft.Win32.SaveFileDialog {
+                Filter = "Таблица (*.xlsx)|*.xlsx|Все файлы (*.*)|*.*"
+            };
+            if (!(bool) saveFileDialog.ShowDialog()) {
+                return; 
+            }
+            var xlsx_file = new FileInfo(saveFileDialog.FileName);
+            using (var package = new ExcelPackage(xlsx_file)) {
+                dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
+                var ws = package.Workbook.Worksheets.Add("1");
+                ws.Cells ["A1"].LoadFromDataTable(dataTable, true);
+                foreach (var cell in ws.Cells) {
+                    cell.Value = cell.Value.ToString().Replace(',', '.');
+                    try {
+                        cell.Value = Convert.ToDecimal(cell.Value);
                     }
-
-                    package.Save();
+                    catch {
+                        cell.Style.Font.Bold = true;
+                    }
                 }
+                package.Save();
             }
         }
 
@@ -334,29 +337,32 @@ namespace Mix_Fu
 
         // measure button
         private void btnMeasureClicked(object sender, RoutedEventArgs e) {
+            log("start measure: " + measureMode);
             if (!canMeasure()) {
                 MessageBox.Show("Error: check log");
                 return;
             }
             switch (measureMode) {
             case MeasureMode.modeDSBDown:
+//                measureTask = Task.Factory.StartNew(() => measure_mix_DSB_down());
                 measure_mix_DSB_down();
                 break;
             case MeasureMode.modeDSBUp:
-                measure_mix_DSB_up();
+                measureTask = Task.Factory.StartNew(() => measure_mix_DSB_up());
                 break;
             case MeasureMode.modeSSBDown:
-                measure_mix_SSB_down();
+                measureTask = Task.Factory.StartNew(() => measure_mix_SSB_down());
                 break;
             case MeasureMode.modeSSBUp:
-                measure_mix_SSB_up();
+                measureTask = Task.Factory.StartNew(() => measure_mix_SSB_up());
                 break;
             case MeasureMode.modeMultiplier:
-                measure_mult();
+                measureTask = Task.Factory.StartNew(() => measure_mult());
                 break;
             default:
                 return;
             }
+            log("end measure");
         }
 
 #endregion regUiEvents
@@ -456,7 +462,7 @@ namespace Mix_Fu
                 log("error: no OUT instrument selected");
                 return false;
             }
-            if ((calibrationTask != null) && (!calibrationTask.IsCompleted)) {
+            if (calibrationTask != null && !calibrationTask.IsCompleted) {
                 log("error: calibration is already running");
                 return false;
             }
@@ -512,21 +518,27 @@ namespace Mix_Fu
                 log("error: no LO instrument selected");
                 return false;
             }
+            if (measureTask != null && !measureTask.IsCompleted) {
+                
+            }
             return true;
         }
 
-        private void measurePower(DataRow row, string SA, decimal inPowGoal, decimal inFreq, string colAtt, string colPow, string colConv, int coeff) {
-            // TODO: exception handling
+        private void measurePower(DataRow row, string SA, decimal inPowGoal, decimal inFreq, string colAtt, string colPow, string colConv, int coeff, int corr) {
             string attStr = row[colAtt].ToString().Replace(',', '.');
             if (string.IsNullOrEmpty(attStr) || attStr == "-") {
-                log("error: skipping " + colPow + ": freq=" + inFreq + " powgoal=" + inPowGoal, true);
+                log("error: empty row, skipping: " + colPow + ": freq=" + inFreq + " powgoal=" + inPowGoal, true);
                 return;
             }
 
             // TODO: move to InstrumentManager
-            send(SA, ":SENSe:FREQuency:RF:CENTer " + inFreq);
-            send(SA, ":CALCulate:MARKer1:X:CENTer " + inFreq);
-
+            try {
+                send(SA, ":SENSe:FREQuency:RF:CENTer " + inFreq);
+                send(SA, ":CALCulate:MARKer1:X:CENTer " + inFreq);
+            }
+            catch (Exception ex) {
+                log("error: measure fail setting freq: " + ex.Message);
+            }
             Thread.Sleep(delay);
 
             decimal attDec = 0;
@@ -535,7 +547,7 @@ namespace Mix_Fu
             string readPowStr = query(SA, ":CALCulate:MARKer:Y?");
             decimal readPowDec = 0;
             decimal.TryParse(readPowStr, NumberStyles.Any, CultureInfo.InvariantCulture, out readPowDec);
-            decimal diffDec = coeff * (inPowGoal- attDec - readPowDec);
+            decimal diffDec = coeff * (inPowGoal - attDec - readPowDec + corr);
 
             row[colPow] = readPowDec.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture).Replace('.', ',');
             row[colConv] = diffDec.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture).Replace('.', ',');
@@ -578,14 +590,26 @@ namespace Mix_Fu
                 inFreqRFDec *= Constants.GHz;
                 inFreqIFDec *= Constants.GHz;
 
-                send(IN, "SOUR:FREQ " + inFreqRFDec);
-                send(LO, "SOUR:FREQ " + inFreqLODec);
-                send(IN, "SOUR:POW " + inPowRF);
-                send(LO, "SOUR:POW " + inPowLO);
+                try {
+                    send(IN, "SOUR:FREQ " + inFreqRFDec);
+                    send(LO, "SOUR:FREQ " + inFreqLODec);
+                }
+                catch (Exception ex) {
+                    log("error: measure fail setting freq, skipping row: " +ex.Message);
+                    continue;
+                }
+                try {
+                    send(IN, "SOUR:POW " + inPowRF);
+                    send(LO, "SOUR:POW " + inPowLO);
+                }
+                catch (Exception ex) {
+                    log("error: measure fail setting pow, skipping row: " + ex.Message);
+                    continue;
+                }
 
-                measurePower(row, OUT, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1);
-                measurePower(row, OUT, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1);
-                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1);
+                measurePower(row, OUT, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
+                measurePower(row, OUT, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
+                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
             }
 
             instrumentManager.releaseInstrument(IN, OUT);
@@ -627,187 +651,95 @@ namespace Mix_Fu
                 inFreqRFDec *= Constants.GHz;
                 inFreqLODec *= Constants.GHz;
 
-                send(LO, "SOUR:FREQ " + inFreqLODec);
-                send(IN, "SOUR:FREQ " + inFreqIFDec);
-                send(LO, "SOUR:POW " + inPowLO);
-                send(IN, "SOUR:POW " + inPowIF);
+                // TODO: extract method
+                try {
+                    send(LO, "SOUR:FREQ " + inFreqLODec);
+                    send(IN, "SOUR:FREQ " + inFreqIFDec);
+                }
+                catch (Exception ex) {
+                    log("error: measure fail setting freq, skipping row: " + ex.Message);
+                    continue;
+                }
+                try {
+                    send(LO, "SOUR:POW " + inPowLO);
+                    send(IN, "SOUR:POW " + inPowIF);
+                }
+                catch (Exception ex) {
+                    log("error: measure fail setting pow, skipping row: " + ex.Message);
+                    continue;
+                }
 
-                measurePower(row, OUT, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1);
-                measurePower(row, OUT, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1);
-                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1);                
+                measurePower(row, OUT, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1, 0);
+                measurePower(row, OUT, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1, 0);
+                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);                
             }
             instrumentManager.releaseInstrument(IN, OUT);
             send(LO, "OUTP:STAT OFF");
             dataGrid.ItemsSource = dataTable.AsDataView();
         }
 
-        public void measure_mix_SSB_down()
-        {
+        public void measure_mix_SSB_down() {
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string LO = ((Instrument)comboLO.SelectedItem).Location;
             string IN = ((Instrument)comboIN.SelectedItem).Location;
             string OUT = ((Instrument)comboOUT.SelectedItem).Location;
 
-            send(OUT, ":CAL:AUTO OFF");
-            send(OUT, ":SENS:FREQ:SPAN span");
-            send(OUT, ":CALC:MARK1:MODE POS");
-            send(OUT, ":POW:ATT " + attenuation.ToString());
-            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            send(LO, ("OUTP:STAT ON"));
-            send(IN, ("OUTP:STAT ON"));
+            instrumentManager.prepareInstrument(IN, OUT);
+            send(LO, "OUTP:STAT ON");
 
-            foreach (DataRow row in dataTable.Rows)
-            {
-                string att_str = "";
-                string t_pow = "";
-                string t_freq_LO = "";
-                string t_freq_LSB = "";
-                string t_freq_USB = "";
-                string t_freq_IF = "";
-                string t_pow_LO = row["PLO"].ToString();
-                string t_pow_LSB = row["PLSB"].ToString();
-                string t_pow_USB = row["PUSB"].ToString();
-                decimal t_freq_LO_dec = 0;
-                decimal t_freq_LSB_dec = 0;
-                decimal t_freq_USB_dec = 0;
-                decimal t_freq_IF_dec = 0;
-                decimal t_pow_IF_dec = 0;
-                decimal t_pow_LSB_dec = 0;
-                decimal t_pow_USB_dec = 0;
-                decimal t_pow_LO_dec = 0;
-                decimal t_pow_goal_LSB_dec = 0;
-                decimal t_pow_goal_USB_dec = 0;
-                decimal t_pow_goal_LO_dec = 0;
-                decimal att = 0;
+            foreach (DataRow row in dataTable.Rows) {
+                string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
+                string inPowLSBStr = row["PLSB"].ToString().Replace(',', '.');
+                string inPowUSBStr = row["PUSB"].ToString().Replace(',', '.');
+                decimal inFreqLODec = 0;
+                decimal inFreqLSBDec = 0;
+                decimal inFreqUSBDec = 0;
+                decimal inFreqIFDec = 0;
+                decimal inPowLSBGoalDec = 0;
+                decimal inPowUSBGoalDec = 0;
+                decimal inPowLOGoalDec = 0;
 
-                if (!(string.IsNullOrEmpty(t_pow_LO)))
-                {
-
-                    decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_goal_LO_dec);
-                    decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_LO_dec);
-                    decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_IF_dec);
-                    t_freq_LO = (t_freq_LO_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-                    t_freq_IF = (t_freq_IF_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-
-                    send(LO, ("SOUR:FREQ " + t_freq_LO));
-                    send(LO, ("SOUR:POW " + t_pow_LO.Replace(',', '.')));
-
-                    //ISO-LO
-                    att_str = row["ATT-LO"].ToString();
-                    if (att_str != "-")
-                    {
-                        send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_LO));
-                        send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_LO));
-                        Thread.Sleep(delay);
-                        t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                        decimal.TryParse(row["ATT-LO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                        decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_LO_dec);
-                        t_pow = t_pow_LO_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["POUT-LO"] = t_pow.Replace('.', ',');
-                        decimal t_iso_lo_dec = t_pow_goal_LO_dec - att - t_pow_LO_dec;
-                        string t_iso_lo = t_iso_lo_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["ISO-LO"] = t_iso_lo.Replace('.', ',');
-                    }
-
-                    if (!(string.IsNullOrEmpty(t_pow_LSB)) && t_pow_LSB != "-" )
-                    {
-                        decimal.TryParse(row["PLSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_goal_LSB_dec);
-                        decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_LSB_dec);
-                        t_freq_LSB = (t_freq_LSB_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-
-                        send(IN, ("SOUR:FREQ " + t_freq_LSB));
-                        send(IN, ("SOUR:POW " + t_pow_LSB.Replace(',', '.')));
-
-                        //CONV-LSB
-                        string att_if = row["ATT-IF"].ToString();
-                        if (!(string.IsNullOrEmpty(att_if)) && att_if != "-")
-                        {
-                            send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_IF));
-                            send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_IF));
-                            Thread.Sleep(delay);
-                            t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                            decimal.TryParse(row["ATT-IF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                            decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_IF_dec);
-                            t_pow = t_pow_IF_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                            row["POUT-IF"] = t_pow.Replace('.', ',');
-                            decimal t_conv_dec = t_pow_IF_dec + att - t_pow_goal_LSB_dec + 3;
-                            string t_conv = t_conv_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                            row["CONV-LSB"] = t_conv.Replace('.', ',');
-                        }
-
-                        //ISO-LSB
-                        string att_lsb = row["ATT-LSB"].ToString();
-                        if (!(string.IsNullOrEmpty(att_if)) && att_if != "-")
-                        {
-                            send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_LSB));
-                            send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_LSB));
-                            Thread.Sleep(delay);
-                            t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                            decimal.TryParse(row["ATT-LSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                            decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_LSB_dec);
-                            t_pow = t_pow_LSB_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                            row["POUT-LSB"] = t_pow.Replace('.', ',');
-                            decimal t_conv_dec = t_pow_goal_LSB_dec - att - t_pow_LSB_dec;
-                            string t_conv = t_conv_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                            row["ISO-LSB"] = t_conv.Replace('.', ',');
-                        }
-                    }
-
-                    //CONV-USB
-                    if (!(string.IsNullOrEmpty(t_pow_USB)) && t_pow_USB != "-")
-                    {
-                        decimal.TryParse(row["PUSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_goal_USB_dec);
-                        decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_USB_dec);
-                        t_freq_USB = (t_freq_USB_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-
-                        send(IN, ("SOUR:FREQ " + t_freq_USB));
-                        send(IN, ("SOUR:POW " + t_pow_USB.Replace(',', '.')));
-
-                        //ISO-USB
-                        string att_usb = row["ATT-USB"].ToString();
-                        if (!(string.IsNullOrEmpty(att_usb)) && att_usb != "-")
-                        {
-                            send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_USB));
-                            send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_USB));
-                            Thread.Sleep(delay);
-                            t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                            decimal.TryParse(row["ATT-USB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                            decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_USB_dec);
-                            t_pow = t_pow_USB_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                            row["POUT-USB"] = t_pow.Replace('.', ',');
-                            decimal t_conv_dec = t_pow_goal_USB_dec - att - t_pow_USB_dec;
-                            string t_conv = t_conv_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                            row["ISO-USB"] = t_conv.Replace('.', ',');
-                        }
-
-                        //CONV-USB
-                        string att_if = row["ATT-IF"].ToString();
-                        if (!(string.IsNullOrEmpty(att_if)) && att_if != "-")
-                        {
-                            send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_IF));
-                            send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_IF));
-                            Thread.Sleep(delay);
-                            t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                            decimal.TryParse(row["ATT-IF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                            decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_IF_dec);
-                            t_pow = t_pow_IF_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                            row["POUT-IF"] = t_pow.Replace('.', ',');
-                            decimal t_conv_dec = t_pow_IF_dec + att - t_pow_goal_USB_dec + 3;
-                            string t_conv = t_conv_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                            row["CONV-USB"] = t_conv.Replace('.', ',');
-                        }
-                    }
+                if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
+                    string.IsNullOrEmpty(inPowLSBStr) || inPowLSBStr == "-" ||
+                    string.IsNullOrEmpty(inPowUSBStr) || inPowUSBStr == "-") {
+                    continue;
                 }
+
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoalDec);
+                decimal.TryParse(row["PUSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowUSBGoalDec);
+                decimal.TryParse(row["PLSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLSBGoalDec);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLODec);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIFDec);
+                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqUSBDec);
+                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLSBDec);
+
+                inFreqLODec *= Constants.GHz;
+                inFreqIFDec *= Constants.GHz;
+                inFreqLSBDec *= Constants.GHz;
+                inFreqUSBDec *= Constants.GHz;
+
+                // TODO: extract freq-pow setting method, add exception handling
+                send(LO, "SOUR:FREQ " + inFreqLODec);
+                send(LO, "SOUR:POW " + inPowLOStr);
+                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
+                send(IN, "SOUR:FREQ " + inFreqLSBDec);
+                send(IN, "SOUR:POW " + inPowLSBStr);
+                measurePower(row, OUT, inPowLSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-LSB", -1, -3);
+                measurePower(row, OUT, inPowLSBGoalDec, inFreqLSBDec, "ATT-LSB", "POUT-LSB", "ISO-LSB", 1, 0);
+
+                send(IN, "SOUR:FREQ " + inFreqUSBDec);
+                send(IN, "SOUR:POW " + inPowUSBStr);
+                measurePower(row, OUT, inPowUSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-USB", -1, -3);
+                measurePower(row, OUT, inPowUSBGoalDec, inFreqUSBDec, "ATT-USB", "POUT-USB", "ISO-USB", 1, 0);
             }
-            send(OUT, ":CAL:AUTO ON");
+            instrumentManager.releaseInstrument(IN, OUT);
             send(LO, "OUTP:STAT OFF");
-            send(IN, "OUTP:STAT OFF");
             dataGrid.ItemsSource = dataTable.AsDataView();
         }
 
-        public void measure_mix_SSB_up()
-        {
+        public void measure_mix_SSB_up() {
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string LO = ((Instrument)comboLO.SelectedItem).Location;
@@ -819,117 +751,46 @@ namespace Mix_Fu
             send(OUT, ":CALC:MARK1:MODE POS");
             send(OUT, ":POW:ATT " + attenuation.ToString());
             //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            send(LO, ("OUTP:STAT ON"));
+            send(LO, "OUTP:STAT ON");
             //send(IN, ("OUTP:STAT ON"));
 
-            foreach (DataRow row in dataTable.Rows)
-            {
-                string t_pow_LO = row["PLO"].ToString();
-                string t_pow_IF = row["PIF"].ToString();
-                if (!(string.IsNullOrEmpty(t_pow_LO)) && !(string.IsNullOrEmpty(t_pow_IF)))
-                {
-                    string att_str = "";
-                    string t_pow = "";
-                    string t_freq_LO = "";
-                    string t_freq_LSB = "";
-                    string t_freq_USB = "";
-                    string t_freq_IF = "";
-                    decimal t_freq_LO_dec = 0;
-                    decimal t_freq_LSB_dec = 0;
-                    decimal t_freq_USB_dec = 0;
-                    decimal t_freq_IF_dec = 0;
-                    decimal t_pow_IF_dec = 0;
-                    decimal t_pow_LSB_dec = 0;
-                    decimal t_pow_USB_dec = 0;
-                    decimal t_pow_LO_dec = 0;
-                    decimal t_pow_goal_IF_dec = 0;
-                    decimal t_pow_goal_LO_dec = 0;
-                    decimal att = 0;
+            foreach (DataRow row in dataTable.Rows) {
+                string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
+                string inPowIFStr = row["PIF"].ToString().Replace(',', '.');
 
-                    decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_goal_IF_dec);
-                    decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_goal_LO_dec);
-                    decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_LO_dec);
-                    decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_LSB_dec);
-                    decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_USB_dec);
-                    decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out t_freq_IF_dec);
-                    t_freq_LO = (t_freq_LO_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-                    t_freq_LSB = (t_freq_LSB_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-                    t_freq_USB = (t_freq_USB_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-                    t_freq_IF = (t_freq_IF_dec * 1000000000).ToString("0", CultureInfo.InvariantCulture);
-
-                    send(LO, ("SOUR:FREQ " + t_freq_LO));
-                    //send(IN, ("SOUR:FREQ " + t_freq_IF));
-                    send(LO, ("SOUR:POW " + t_pow_LO.Replace(',', '.')));
-                    //send(IN, ("SOUR:POW " + t_pow_IF.Replace(',', '.')));
-
-                    // CONV-LSB
-                    att_str = row["ATT-LSB"].ToString();
-                    if (att_str != "-")
-                    {
-                        send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_LSB));
-                        send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_LSB));
-                        Thread.Sleep(delay);
-                        t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                        decimal.TryParse(row["ATT-LSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                        decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_LSB_dec);
-                        t_pow = t_pow_LSB_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["POUT-LSB"] = t_pow.Replace('.', ',');
-                        decimal t_conv_dec = t_pow_LSB_dec + att - t_pow_goal_IF_dec - 3;
-                        string t_conv = t_conv_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["CONV-LSB"] = t_conv.Replace('.', ',');
-                    }
-
-                    // CONV-USB
-                    att_str = row["ATT-USB"].ToString();
-                    if (att_str != "-")
-                    {
-                        send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_USB));
-                        send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_USB));
-                        Thread.Sleep(delay);
-                        t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                        decimal.TryParse(row["ATT-USB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                        decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_USB_dec);
-                        t_pow = t_pow_USB_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["POUT-USB"] = t_pow.Replace('.', ',');
-                        decimal t_conv_dec = t_pow_USB_dec + att - t_pow_goal_IF_dec - 3;
-                        string t_conv = t_conv_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["CONV-USB"] = t_conv.Replace('.', ',');
-                    }
-
-                    //ISO-IF
-                    att_str = row["ATT-IF"].ToString();
-                    if (att_str != "-")
-                    {
-                        send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_IF));
-                        send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_IF));
-                        Thread.Sleep(delay);
-                        t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                        decimal.TryParse(row["ATT-IF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                        decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_IF_dec);
-                        t_pow = t_pow_IF_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["POUT-IF"] = t_pow.Replace('.', ',');
-                        decimal t_iso_if_dec = t_pow_goal_IF_dec - att - t_pow_IF_dec - 3;
-                        string t_iso_if = t_iso_if_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["ISO-IF"] = t_iso_if.Replace('.', ',');
-                    }
-
-                    //ISO-LO
-                    att_str = row["ATT-LO"].ToString();
-                    if (att_str != "-")
-                    {
-                        send(OUT, (":SENSe:FREQuency:RF:CENTer " + t_freq_LO));
-                        send(OUT, (":CALCulate:MARKer1:X:CENTer " + t_freq_LO));
-                        Thread.Sleep(delay);
-                        t_pow = query(OUT, ":CALCulate:MARKer:Y?");
-                        decimal.TryParse(row["ATT-LO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out att);
-                        decimal.TryParse(t_pow, NumberStyles.Any, CultureInfo.InvariantCulture, out t_pow_LO_dec);
-                        t_pow = t_pow_LO_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["POUT-LO"] = t_pow.Replace('.', ',');
-                        decimal t_iso_lo_dec = t_pow_goal_LO_dec - att - t_pow_LO_dec;
-                        string t_iso_lo = t_iso_lo_dec.ToString("0.00", CultureInfo.InvariantCulture);
-                        row["ISO-LO"] = t_iso_lo.Replace('.', ',');
-                    }
+                if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
+                    string.IsNullOrEmpty(inPowIFStr) || inPowIFStr == "-") {
+                    continue;
                 }
+
+                decimal inFreqLO = 0;
+                decimal inFreqLSB = 0;
+                decimal inFreqUSB = 0;
+                decimal inFreqIF = 0;
+                decimal inPowIFGoal = 0;
+                decimal inPowLOGoal = 0;
+
+                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowIFGoal);
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoal);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLO);
+                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLSB);
+                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqUSB);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIF);
+                inFreqLO *= Constants.GHz;
+                inFreqLSB *= Constants.GHz;
+                inFreqUSB *= Constants.GHz;
+                inFreqIF *= Constants.GHz;
+
+                send(LO, "SOUR:FREQ " + inFreqLO);
+                send(LO, "SOUR:POW " + inPowLOStr);
+                //send(IN, ("SOUR:FREQ " + t_freq_IF));
+                //send(IN, ("SOUR:POW " + t_pow_IF.Replace(',', '.')));
+
+                measurePower(row, OUT, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
+                measurePower(row, OUT, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
+                measurePower(row, OUT, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
+                measurePower(row, OUT, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
             }
             send(OUT, ":CAL:AUTO ON");
             send(LO, "OUTP:STAT OFF");
@@ -937,8 +798,7 @@ namespace Mix_Fu
             dataGrid.ItemsSource = dataTable.AsDataView();
         }
 
-        public void measure_mult()
-        {
+        public void measure_mult() {
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             string IN = ((Instrument)comboIN.SelectedItem).Location;
