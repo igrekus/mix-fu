@@ -84,28 +84,32 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Ag34410_2_35">
-      <HintPath>..\..\..\PLUGINS\Agilent\Ag34410_2_35.dll</HintPath>
+      <HintPath>C:\Program Files\Keysight\dll\Ag34410_2_35.dll</HintPath>
     </Reference>
     <Reference Include="Ag90x0_SA_A_08_03">
-      <HintPath>..\..\..\PLUGINS\Agilent\Ag90x0_SA_A_08_03.dll</HintPath>
+      <HintPath>C:\Program Files\Keysight\dll\Ag90x0_SA_A_08_03.dll</HintPath>
     </Reference>
     <Reference Include="Agilent.CommandExpert.DataModel, Version=1.4.944.0, Culture=neutral, PublicKeyToken=b51aac182336bfb6">
-      <HintPath>..\..\Mix-Fu_2016_09_23\Mix-Fu\bin\Debug\Agilent.CommandExpert.DataModel.dll</HintPath>
+      <HintPath>C:\Program Files\Keysight\dll\Agilent.CommandExpert.DataModel.dll</HintPath>
     </Reference>
     <Reference Include="Agilent.CommandExpert.InstrumentAbstraction, Version=1.4.944.0, Culture=neutral, PublicKeyToken=c5e9dbe29758600c">
-      <HintPath>..\..\Mix-Fu_2016_09_23\Mix-Fu\bin\Debug\Agilent.CommandExpert.InstrumentAbstraction.dll</HintPath>
+      <HintPath>C:\Program Files\Keysight\dll\Agilent.CommandExpert.InstrumentAbstraction.dll</HintPath>
+    </Reference>
+    <Reference Include="Agilent.TMFramework.InternalUtils.WinForms, Version=2.0.10124.0, Culture=neutral, PublicKeyToken=7a01cdb2a9131f73, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files\Agilent\IO Libraries Suite\Agilent.TMFramework.InternalUtils.WinForms.dll</HintPath>
     </Reference>
     <Reference Include="AgMXG_A_01_80">
-      <HintPath>..\..\..\PLUGINS\Agilent\AgMXG_A_01_80.dll</HintPath>
+      <HintPath>C:\Program Files\Keysight\dll\AgMXG_A_01_80.dll</HintPath>
     </Reference>
     <Reference Include="AgSCPI99_1_0">
-      <HintPath>..\..\..\PLUGINS\Agilent\AgSCPI99_1_0.dll</HintPath>
+      <HintPath>C:\Program Files\Keysight\dll\AgSCPI99_1_0.dll</HintPath>
     </Reference>
     <Reference Include="EPPlus">
-      <HintPath>..\..\..\PLUGINS\EPPlus 4.0.4 Sample\Binaries\EPPlus.dll</HintPath>
+      <HintPath>C:\Program Files\Keysight\dll\EPPlus.dll</HintPath>
     </Reference>
     <Reference Include="Interop.HMCSynthLib">
-      <HintPath>obj\Debug\Interop.HMCSynthLib.dll</HintPath>
+      <HintPath>C:\Program Files\Keysight\dll\Interop.HMCSynthLib.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
     <Reference Include="System" />
