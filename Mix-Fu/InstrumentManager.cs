@@ -1,4 +1,4 @@
-﻿//#define mock
+﻿#define mock
 
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 using System;
@@ -302,7 +302,7 @@ namespace Mix_Fu {
             inFreqDec *= Constants.GHz;
 
             if (inFreqDec * harmonic > maxfreq) {
-                log("error: calibrate fail: frequency is out of limits", false);
+                log("error: calibrate fail: frequency is out of limits: " + inFreqDec, false);
                 return "-";
             }
 
@@ -322,7 +322,8 @@ namespace Mix_Fu {
             decimal.TryParse(readPow, NumberStyles.Any, CultureInfo.InvariantCulture, out readPowDec);
             decimal errDec = powGoal - readPowDec;
 
-            if (errDec < 0) errDec = 0;
+            if (errDec < 0)
+                errDec = 0;
 
             return errDec.ToString("0.000", CultureInfo.InvariantCulture).Replace('.', ',');
         }
@@ -349,6 +350,7 @@ namespace Mix_Fu {
 
             foreach (DataRow row in data.Rows) {
                 int harmonic = 1;   // hack
+
                 foreach (var p in parameters) {
                     string freq = row[p.Item1].ToString();
 
