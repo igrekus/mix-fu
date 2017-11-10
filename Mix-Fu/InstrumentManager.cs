@@ -1,4 +1,4 @@
-﻿#define mock
+//#define mock
 
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 using System;
