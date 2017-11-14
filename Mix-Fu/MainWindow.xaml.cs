@@ -50,6 +50,9 @@ namespace Mix_Fu {
 #region regDataMembers
         // TODO: switch TryParse overloads
 
+        // TODO: progressbar for calibration and measurements
+        // TODO: learn АКИП syntax
+
         List<Instrument> listInstruments = new List<Instrument>();
         // List<CalPoint> listCalData = new List<CalPoint>();
         // List<MeasPoint> listMeasData = new List<MeasPoint>();
@@ -271,6 +274,7 @@ namespace Mix_Fu {
         }
 
         private void btnSaveXlsxClicked(object sender, RoutedEventArgs e) {
+            // TODO: allow overwrite existing files
             var saveFileDialog = new Microsoft.Win32.SaveFileDialog {
                 Filter = "Таблица (*.xlsx)|*.xlsx|Все файлы (*.*)|*.*"
             };
@@ -434,12 +438,18 @@ namespace Mix_Fu {
             return true;
         }
 
-        public void calibrate(Action func) {
+        public async void calibrate(Action func) {
+            var stopwatch = Stopwatch.StartNew();
+
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             calibrationTask = Task.Factory.StartNew(func);
+            await calibrationTask;
 
             dataGrid.ItemsSource = dataTable.AsDataView();
+
+            stopwatch.Stop();
+            log("run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
         }
 
 #endregion regCalibrationManager
@@ -470,7 +480,9 @@ namespace Mix_Fu {
             return true;
         }
 
-        public void measure() {
+        public async void measure() {
+            var stopwatch = Stopwatch.StartNew();
+
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
             switch (measureMode) {
@@ -494,6 +506,10 @@ namespace Mix_Fu {
             }
 
             dataGrid.ItemsSource = dataTable.AsDataView();
+
+            await measureTask;
+            stopwatch.Stop();
+            log("run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
         }
 
         private void measurePower(DataRow row, string SA, decimal powGoal, decimal freq, string colAtt, string colPow, string colConv, int coeff, int corr) {
