@@ -1,4 +1,4 @@
-﻿#define mock
+﻿//#define mock
 
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 using System;
@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 
 // TODO: catch axception on calibration fail
 
@@ -170,9 +171,9 @@ namespace Mix_Fu {
         public void prepareInstrument(string GEN, string SA) {
             // TODO: check SA & GEN assignment logic
             send(SA, ":CAL:AUTO OFF");                       // выключаем автокалибровку анализатора спектра
-            send(SA, ":SENS:FREQ:SPAN " + span.ToString());  // выставляем спан
+            send(SA, ":SENS:FREQ:SPAN " + span);             // выставляем спан
             send(SA, ":CALC:MARK1:MODE POS");                // выставляем режим маркера
-            send(SA, ":POW:ATT " + attenuation.ToString());  // выставляем аттенюацию
+            send(SA, ":POW:ATT " + attenuation);             // выставляем аттенюацию
             send(GEN, "OUTP:STAT ON");                       // включаем генератор
             //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
 
@@ -193,7 +194,7 @@ namespace Mix_Fu {
             send(GEN, "OUTP:STAT OFF");   //выключаем генератор
         }
 
-        public void calibrateIn(DataTable data, ParameterStruct paramDict, CancellationToken token) {
+        public void calibrateIn(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
             // TODO: exception handling
             // TODO: split into methods
             string GEN = m_IN.Location;
@@ -205,6 +206,7 @@ namespace Mix_Fu {
             // TODO: if performance issue, write own key class, override Equals() and GetHash()
             var cache = new Dictionary<Tuple<decimal, decimal>, Tuple<decimal, decimal>>();
 
+            int i = 0;
             foreach (DataRow row in data.Rows) {
                 string inFreqStr = row[paramDict.colFreq].ToString().Replace(',', '.');
                 string inPowGoalStr = row[paramDict.colPowGoal].ToString().Replace(',', '.');
@@ -276,15 +278,19 @@ namespace Mix_Fu {
                 // ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
                 row[paramDict.colPow] = powErrPair.Item1.ToString(Constants.decimalFormat).Replace('.', ',');
                 row["ERR"] = powErrPair.Item2.ToString(Constants.decimalFormat).Replace('.', ',');
+
+                prog?.Report((double)i / data.Rows.Count * 100);
+                ++i;
             }
             releaseInstrument(GEN, SA);
             log("end calibrate IN", false);
+            prog?.Report(100);
         }
 
-        public void calibrateLo(DataTable data, ParameterStruct paramDict, CancellationToken token) {
+        public void calibrateLo(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
             Instrument tmpIn = m_IN;
             m_IN = m_LO;
-            calibrateIn(data, paramDict, token);
+            calibrateIn(prog, data, paramDict, token);
             m_IN = tmpIn;
         }
 
@@ -328,7 +334,7 @@ namespace Mix_Fu {
             return errDec.ToString("0.000", CultureInfo.InvariantCulture).Replace('.', ',');
         }
 
-        public void calibrateOut(DataTable data, List<Tuple<string, string>> parameters, MeasureMode mode) {
+        public void calibrateOut(IProgress<double> prog, DataTable data, List<Tuple<string, string>> parameters, MeasureMode mode) {
             // TODO: fail whole row on any error
             string GEN = m_IN.Location;
             string SA = m_OUT.Location;
@@ -348,6 +354,7 @@ namespace Mix_Fu {
 
             var cache = new Dictionary<string, string>();
 
+            int i = 0;
             foreach (DataRow row in data.Rows) {
                 int harmonic = 1;   // hack
 
@@ -364,8 +371,12 @@ namespace Mix_Fu {
                         ++harmonic;
                     }
                 }
+
+                prog?.Report((double)i / data.Rows.Count * 100);
+                ++i;
             }
             releaseInstrument(GEN, SA);
+            prog?.Report(100);
         }
 
     }

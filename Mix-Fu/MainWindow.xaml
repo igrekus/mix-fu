@@ -138,5 +138,6 @@
             <TextBlock x:Name="textLog" TextWrapping="Wrap" FontSize="9.333" TextDecorations="{x:Null}" Margin="2" Text="Ready"/>
         </ScrollViewer>
         <CheckBox x:Name="LogVerbose" Content="developer mode" HorizontalAlignment="Left" Margin="5,210,0,0" Grid.Row="1" VerticalAlignment="Top" Grid.ColumnSpan="2" Width="203" Click="LogVerboseToggled"/>
+        <ProgressBar x:Name="pbTaskStatus" Height="11" Margin="1,213,1,0" Grid.Row="1" VerticalAlignment="Top" Grid.Column="2"/>
     </Grid>
 </Window>
