@@ -1,20 +1,13 @@
-﻿//#define mock
+﻿#define mock
 
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
-using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
-using System.Windows;
-using System.Windows.Controls;
 
-// TODO: catch axception on calibration fail
-
-namespace Mix_Fu {
+namespace Mixer {
 
     public struct ParameterStruct {
         public string colFreq;
@@ -140,7 +133,7 @@ namespace Mix_Fu {
             return answer;
         }
 #endif
-        public void searchInstruments(List<Instrument> instruments, int maxPort, int gpib, CancellationToken token) {
+        public void searchInstruments(IProgress<double> prog, List<Instrument> instruments, int maxPort, int gpib, CancellationToken token) {
             log("start instrument search...", false);
 
             for (int i = 0; i <= maxPort; i++) {
@@ -160,7 +153,10 @@ namespace Mix_Fu {
                 catch (Exception ex) {
                     log(ex.Message, true);
                 }
+
+                prog?.Report((double)i / maxPort * 100);
             }
+            prog?.Report(100);
             if (instruments.Count == 0) {
                 log("error: no instruments found, check connection", false);
                 return;
@@ -200,7 +196,6 @@ namespace Mix_Fu {
             string GEN = m_IN.Location;
             string SA = m_OUT.Location;
 
-            log("start calibrate IN: " + "GEN=" + GEN + " SA=" + SA, false);
             prepareInstrument(GEN, SA);
 
             // TODO: if performance issue, write own key class, override Equals() and GetHash()
@@ -283,7 +278,6 @@ namespace Mix_Fu {
                 ++i;
             }
             releaseInstrument(GEN, SA);
-            log("end calibrate IN", false);
             prog?.Report(100);
         }
 
@@ -339,8 +333,6 @@ namespace Mix_Fu {
             string GEN = m_IN.Location;
             string SA = m_OUT.Location;
 
-            log("start calibrate IN: " + "GEN=" + GEN + " SA=" + SA, false);
-
             prepareInstrument(GEN, SA);
 
             const decimal tempPow = (decimal)-20.00;
@@ -379,5 +371,183 @@ namespace Mix_Fu {
             prog?.Report(100);
         }
 
+        public void measurePower(DataRow row, string SA, decimal powGoal, decimal freq, string colAtt, string colPow, string colConv, int coeff, int corr) {
+            string attStr = row[colAtt].ToString().Replace(',', '.');
+            if (string.IsNullOrEmpty(attStr) || attStr == "-") {
+                log("error: measure: empty row, skipping: " + colPow + ": freq=" + freq + " powgoal=" + powGoal, true);
+                row[colPow] = "-";
+                row[colConv] = "-";
+                return;
+            }
+            if (freq > maxfreq) {
+                log("error: measure: freq is out of limits, skipping: " + colPow + ": freq=" + freq + " powgoal=" + powGoal, true);
+                row[colPow] = "-";
+                row[colConv] = "-";
+                return;
+            }
+            // TODO: move to InstrumentManager
+            try {
+                send(SA, ":SENSe:FREQuency:RF:CENTer " + freq);
+                send(SA, ":CALCulate:MARKer1:X:CENTer " + freq);
+            }
+            catch (Exception ex) {
+                log("error: measure fail setting freq: " + ex.Message, false);
+                row[colPow] = "-";
+                row[colConv] = "-";
+                return;
+            }
+            Thread.Sleep(delay);
+
+            decimal att = 0;
+            decimal.TryParse(attStr, NumberStyles.Any, CultureInfo.InvariantCulture, out att);
+
+            decimal readPow = 0;
+            try {
+                decimal.TryParse(query(SA, ":CALCulate:MARKer:Y?"), NumberStyles.Any,
+                    CultureInfo.InvariantCulture, out readPow);
+            }
+            catch (Exception ex) {
+                log("error: " + ex.Message, false);
+            }
+            decimal diff = coeff * (powGoal - att - readPow + corr);
+
+            row[colPow] = readPow.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture).Replace('.', ',');
+            row[colConv] = diff.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture).Replace('.', ',');
+        }
+
+        public void measure_mix_DSB_down(IProgress<double> prog, DataTable data) {
+            string IN = m_IN.Location;
+            string OUT = m_OUT.Location;
+            string LO = m_LO.Location;
+
+            // TODO: move all sends
+            prepareInstrument(IN, OUT);
+            send(LO, "OUTP:STAT ON");
+
+            int i = 0;
+            foreach (DataRow row in data.Rows) {
+                // TODO: convert do decimal?
+                string inPowLO = row["PLO"].ToString().Replace(',', '.');
+                string inPowRF = row["PRF"].ToString().Replace(',', '.');
+                if (string.IsNullOrEmpty(inPowLO) || inPowLO == "-" ||
+                    string.IsNullOrEmpty(inPowRF) || inPowRF == "-") {
+                    log("warning: empty row, skipping", false);
+                    continue;
+                }
+
+                // TODO: check for empty columns:
+                decimal inPowLOGoalDec = 0;
+                decimal inPowRFGoalDec = 0;
+                decimal inFreqIFDec = 0;
+                decimal inFreqRFDec = 0;
+                decimal inFreqLODec = 0;
+
+                // TODO: exception handling
+                // TODO: need to check for empty cells?
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoalDec);
+                decimal.TryParse(row["PRF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowRFGoalDec);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLODec);
+                decimal.TryParse(row["FRF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqRFDec);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIFDec);
+                inFreqLODec *= Constants.GHz;
+                inFreqRFDec *= Constants.GHz;
+                inFreqIFDec *= Constants.GHz;
+
+                // TODO: write "-" into corresponding column on fail
+                try {
+                    send(IN, "SOUR:FREQ " + inFreqRFDec);
+                    send(LO, "SOUR:FREQ " + inFreqLODec);
+                }
+                catch (Exception ex) {
+                    log("error: measure fail setting freq, skipping row: " + ex.Message, false);
+                    continue;
+                }
+                try {
+                    send(IN, "SOUR:POW " + inPowRF);
+                    send(LO, "SOUR:POW " + inPowLO);
+                }
+                catch (Exception ex) {
+                    log("error: measure fail setting pow, skipping row: " + ex.Message, false);
+                    continue;
+                }
+
+                measurePower(row, OUT, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
+                measurePower(row, OUT, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
+                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
+                prog?.Report((double)i / data.Rows.Count * 100);
+                ++i;
+            }
+
+            releaseInstrument(IN, OUT);
+            // TODO: move sends to instrumentManager
+            send(LO, "OUTP:STAT OFF");
+
+            prog?.Report(100);
+        }
+
+        public void measure_mix_DSB_up(IProgress<double> prog, DataTable data) {
+            string IN = m_IN.Location;
+            string OUT = m_OUT.Location;
+            string LO = m_LO.Location;
+
+            prepareInstrument(IN, OUT);
+            send(LO, "OUTP:STAT ON");
+
+            int i = 0;
+            foreach (DataRow row in data.Rows) {
+                string inPowLO = row["PLO"].ToString().Replace(',', '.');
+                string inPowIF = row["PIF"].ToString().Replace(',', '.');
+                if (string.IsNullOrEmpty(inPowLO) || inPowLO == "-" ||
+                    string.IsNullOrEmpty(inPowIF) || inPowIF == "-") {
+                    log("warning: empty row, skipping", false);
+                    continue;
+                }
+
+                decimal inPowIFGoalDec = 0;
+                decimal inPowLOGoalDec = 0;
+                decimal inFreqLODec = 0;
+                decimal inFreqRFDec = 0;
+                decimal inFreqIFDec = 0;
+
+                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowIFGoalDec);
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoalDec);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLODec);
+                decimal.TryParse(row["FRF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqRFDec);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIFDec);
+                inFreqIFDec *= Constants.GHz;
+                inFreqRFDec *= Constants.GHz;
+                inFreqLODec *= Constants.GHz;
+
+                // TODO: extract method
+                try {
+                    send(LO, "SOUR:FREQ " + inFreqLODec);
+                    send(IN, "SOUR:FREQ " + inFreqIFDec);
+                }
+                catch (Exception ex) {
+                    log("error: measure fail setting freq, skipping row: " + ex.Message, false);
+                    continue;
+                }
+                try {
+                    send(LO, "SOUR:POW " + inPowLO);
+                    send(IN, "SOUR:POW " + inPowIF);
+                }
+                catch (Exception ex) {
+                    log("error: measure fail setting pow, skipping row: " + ex.Message, false);
+                    continue;
+                }
+
+                measurePower(row, OUT, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1, 0);
+                measurePower(row, OUT, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1, 0);
+                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
+                prog?.Report((double)i / data.Rows.Count * 100);
+                ++i;
+            }
+            releaseInstrument(IN, OUT);
+            send(LO, "OUTP:STAT OFF");
+            log("end measure", false);
+            prog?.Report(100);
+        }
     }
 }
