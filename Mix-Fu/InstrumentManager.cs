@@ -138,11 +138,10 @@ namespace Mixer {
 
             for (int i = 0; i <= maxPort; i++) {
                 if (token.IsCancellationRequested) {
-                    log("error: aborted on user request", false);
                     token.ThrowIfCancellationRequested();
                     return;
                 }
-                string location = "GPIB" + gpib.ToString() + "::" + i.ToString() + "::INSTR";
+                string location = "GPIB" + gpib + "::" + i + "::INSTR";
                 log("try " + location, false);
 
                 try {
@@ -171,9 +170,9 @@ namespace Mixer {
             send(SA, ":CALC:MARK1:MODE POS");                // выставляем режим маркера
             send(SA, ":POW:ATT " + attenuation);             // выставляем аттенюацию
             send(GEN, "OUTP:STAT ON");                       // включаем генератор
-            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-
+            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString())
             // TODO: send GEN modulation off
+            log("capture instrument", false);
         }
 
         private void setCalibrationFreq(string GEN, string SA, decimal inFreqDec) {
@@ -188,6 +187,7 @@ namespace Mixer {
             // TODO: check SA & GEN assignment logic
             send(SA, ":CAL:AUTO ON");     //включаем автокалибровку анализатора спектра
             send(GEN, "OUTP:STAT OFF");   //выключаем генератор
+            log("release instrument", false);
         }
 
         public void calibrateIn(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
@@ -203,6 +203,11 @@ namespace Mixer {
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
+                if (token.IsCancellationRequested) {
+                    releaseInstrument(GEN, SA);
+                    token.ThrowIfCancellationRequested();
+                    return;
+                }
                 string inFreqStr = row[paramDict.colFreq].ToString().Replace(',', '.');
                 string inPowGoalStr = row[paramDict.colPowGoal].ToString().Replace(',', '.');
 
@@ -328,7 +333,7 @@ namespace Mixer {
             return errDec.ToString("0.000", CultureInfo.InvariantCulture).Replace('.', ',');
         }
 
-        public void calibrateOut(IProgress<double> prog, DataTable data, List<Tuple<string, string>> parameters, MeasureMode mode) {
+        public void calibrateOut(IProgress<double> prog, DataTable data, List<Tuple<string, string>> parameters, MeasureMode mode, CancellationToken token) {
             // TODO: fail whole row on any error
             string GEN = m_IN.Location;
             string SA = m_OUT.Location;
@@ -348,6 +353,11 @@ namespace Mixer {
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
+                if (token.IsCancellationRequested) {
+                    releaseInstrument(GEN, SA);
+                    token.ThrowIfCancellationRequested();
+                    return;
+                }
                 int harmonic = 1;   // hack
 
                 foreach (var p in parameters) {
@@ -415,17 +425,23 @@ namespace Mixer {
             row[colConv] = diff.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture).Replace('.', ',');
         }
 
-        public void measure_mix_DSB_down(IProgress<double> prog, DataTable data) {
-            string IN = m_IN.Location;
-            string OUT = m_OUT.Location;
-            string LO = m_LO.Location;
+        public void measure_mix_DSB_down(IProgress<double> prog, DataTable data, CancellationToken token) {
+            string GEN = m_IN.Location;
+            string SA = m_OUT.Location;
+            string GET = m_LO.Location;
 
             // TODO: move all sends
-            prepareInstrument(IN, OUT);
-            send(LO, "OUTP:STAT ON");
+            prepareInstrument(GEN, SA);
+            send(GET, "OUTP:STAT ON");
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
+                if (token.IsCancellationRequested) {
+                    send(GET, "OUTP:STAT OFF");
+                    releaseInstrument(GEN, SA);
+                    token.ThrowIfCancellationRequested();
+                    return;
+                }
                 // TODO: convert do decimal?
                 string inPowLO = row["PLO"].ToString().Replace(',', '.');
                 string inPowRF = row["PRF"].ToString().Replace(',', '.');
@@ -455,47 +471,53 @@ namespace Mixer {
 
                 // TODO: write "-" into corresponding column on fail
                 try {
-                    send(IN, "SOUR:FREQ " + inFreqRFDec);
-                    send(LO, "SOUR:FREQ " + inFreqLODec);
+                    send(GEN, "SOUR:FREQ " + inFreqRFDec);
+                    send(GET, "SOUR:FREQ " + inFreqLODec);
                 }
                 catch (Exception ex) {
                     log("error: measure fail setting freq, skipping row: " + ex.Message, false);
                     continue;
                 }
                 try {
-                    send(IN, "SOUR:POW " + inPowRF);
-                    send(LO, "SOUR:POW " + inPowLO);
+                    send(GEN, "SOUR:POW " + inPowRF);
+                    send(GET, "SOUR:POW " + inPowLO);
                 }
                 catch (Exception ex) {
                     log("error: measure fail setting pow, skipping row: " + ex.Message, false);
                     continue;
                 }
 
-                measurePower(row, OUT, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
-                measurePower(row, OUT, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
-                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, SA, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
+                measurePower(row, SA, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
+                measurePower(row, SA, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
 
-            releaseInstrument(IN, OUT);
+            releaseInstrument(GEN, SA);
             // TODO: move sends to instrumentManager
-            send(LO, "OUTP:STAT OFF");
+            send(GET, "OUTP:STAT OFF");
 
             prog?.Report(100);
         }
 
-        public void measure_mix_DSB_up(IProgress<double> prog, DataTable data) {
-            string IN = m_IN.Location;
-            string OUT = m_OUT.Location;
-            string LO = m_LO.Location;
+        public void measure_mix_DSB_up(IProgress<double> prog, DataTable data, CancellationToken token) {
+            string GEN = m_IN.Location;
+            string SA = m_OUT.Location;
+            string GET = m_LO.Location;
 
-            prepareInstrument(IN, OUT);
-            send(LO, "OUTP:STAT ON");
+            prepareInstrument(GEN, SA);
+            send(GET, "OUTP:STAT ON");
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
+                if (token.IsCancellationRequested) {
+                    send(GET, "OUTP:STAT OFF");
+                    releaseInstrument(GEN, SA);
+                    token.ThrowIfCancellationRequested();
+                    return;
+                }
                 string inPowLO = row["PLO"].ToString().Replace(',', '.');
                 string inPowIF = row["PIF"].ToString().Replace(',', '.');
                 if (string.IsNullOrEmpty(inPowLO) || inPowLO == "-" ||
@@ -521,32 +543,245 @@ namespace Mixer {
 
                 // TODO: extract method
                 try {
-                    send(LO, "SOUR:FREQ " + inFreqLODec);
-                    send(IN, "SOUR:FREQ " + inFreqIFDec);
+                    send(GET, "SOUR:FREQ " + inFreqLODec);
+                    send(GEN, "SOUR:FREQ " + inFreqIFDec);
                 }
                 catch (Exception ex) {
                     log("error: measure fail setting freq, skipping row: " + ex.Message, false);
                     continue;
                 }
                 try {
-                    send(LO, "SOUR:POW " + inPowLO);
-                    send(IN, "SOUR:POW " + inPowIF);
+                    send(GET, "SOUR:POW " + inPowLO);
+                    send(GEN, "SOUR:POW " + inPowIF);
                 }
                 catch (Exception ex) {
                     log("error: measure fail setting pow, skipping row: " + ex.Message, false);
                     continue;
                 }
 
-                measurePower(row, OUT, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1, 0);
-                measurePower(row, OUT, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1, 0);
-                measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, SA, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1, 0);
+                measurePower(row, SA, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1, 0);
+                measurePower(row, SA, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
+                prog?.Report((double)i / data.Rows.Count * 100);
+                ++i;
+            }
+            releaseInstrument(GEN, SA);
+            send(GET, "OUTP:STAT OFF");
+            prog?.Report(100);
+        }
+
+        public void measure_mix_SSB_down(IProgress<double> prog, DataTable data, CancellationToken token) {
+            string GEN = m_IN.Location;
+            string SA = m_OUT.Location;
+            string GET = m_LO.Location;
+
+            prepareInstrument(GEN, SA);
+            send(GET, "OUTP:STAT ON");
+
+            int i = 0;
+            foreach (DataRow row in data.Rows) {
+                if (token.IsCancellationRequested) {
+                    send(GET, "OUTP:STAT OFF");
+                    releaseInstrument(GEN, SA);
+                    token.ThrowIfCancellationRequested();
+                    return;
+                }
+                string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
+                string inPowLSBStr = row["PLSB"].ToString().Replace(',', '.');
+                string inPowUSBStr = row["PUSB"].ToString().Replace(',', '.');
+                decimal inFreqLODec = 0;
+                decimal inFreqLSBDec = 0;
+                decimal inFreqUSBDec = 0;
+                decimal inFreqIFDec = 0;
+                decimal inPowLSBGoalDec = 0;
+                decimal inPowUSBGoalDec = 0;
+                decimal inPowLOGoalDec = 0;
+
+                if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
+                    string.IsNullOrEmpty(inPowLSBStr) || inPowLSBStr == "-" ||
+                    string.IsNullOrEmpty(inPowUSBStr) || inPowUSBStr == "-") {
+                    log("warning: empty row, skipping", false);
+                    continue;
+                }
+
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoalDec);
+                decimal.TryParse(row["PUSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowUSBGoalDec);
+                decimal.TryParse(row["PLSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLSBGoalDec);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLODec);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIFDec);
+                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqUSBDec);
+                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLSBDec);
+
+                inFreqLODec *= Constants.GHz;
+                inFreqIFDec *= Constants.GHz;
+                inFreqLSBDec *= Constants.GHz;
+                inFreqUSBDec *= Constants.GHz;
+
+                // TODO: extract freq-pow setting method, add exception handling
+                try {
+                    send(GET, "SOUR:FREQ " + inFreqLODec);
+                    send(GET, "SOUR:POW " + inPowLOStr);
+                }
+                catch (Exception ex) {
+                    log("error: measure: fail setting LO params, skipping row (" + ex.Message + ")", false);
+                    continue;
+                }
+                measurePower(row, SA, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
+                try {
+                    send(GEN, "SOUR:FREQ " + inFreqLSBDec);
+                    send(GEN, "SOUR:POW " + inPowLSBStr);
+                }
+                catch (Exception ex) {
+                    log("error: measure: fail setting IN LSB params, skipping row (" + ex.Message + ")", false);
+                    continue;
+                }
+                measurePower(row, SA, inPowLSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-LSB", -1, -3);
+                measurePower(row, SA, inPowLSBGoalDec, inFreqLSBDec, "ATT-LSB", "POUT-LSB", "ISO-LSB", 1, 0);
+
+                try {
+                    send(GEN, "SOUR:FREQ " + inFreqUSBDec);
+                    send(GEN, "SOUR:POW " + inPowUSBStr);
+                }
+                catch (Exception ex) {
+                    log("error: measure: fail setting IN USB params, skipping row (" + ex.Message + ")", false);
+                    continue;
+                }
+                measurePower(row, SA, inPowUSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-USB", -1, -3);
+                measurePower(row, SA, inPowUSBGoalDec, inFreqUSBDec, "ATT-USB", "POUT-USB", "ISO-USB", 1, 0);
+
+                prog?.Report((double)i / data.Rows.Count * 100);
+                ++i;
+            }
+            releaseInstrument(GEN, SA);
+            send(GET, "OUTP:STAT OFF");
+            prog?.Report(100);
+        }
+
+        public void measure_mix_SSB_up(IProgress<double> prog, DataTable data, CancellationToken token) {
+            //            string IN = instrumentManager.m_IN.Location;
+            string SA = m_OUT.Location;
+            string GET = m_LO.Location;
+
+            send(SA, ":CAL:AUTO OFF");
+            send(SA, ":SENS:FREQ:SPAN 1000000");
+            send(SA, ":CALC:MARK1:MODE POS");
+            send(SA, ":POW:ATT " + attenuation);
+            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
+            send(GET, "OUTP:STAT ON");
+            //send(IN, ("OUTP:STAT ON"));
+
+            int i = 0;
+            foreach (DataRow row in data.Rows) {
+                if (token.IsCancellationRequested) {
+                    send(SA, ":CAL:AUTO ON");
+                    send(GET, "OUTP:STAT OFF");
+                    //send(IN, "OUTP:STAT OFF");
+                    log("release instrument", false);
+                    token.ThrowIfCancellationRequested();
+                    return;
+                }
+                string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
+                string inPowIFStr = row["PIF"].ToString().Replace(',', '.');
+
+                if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
+                    string.IsNullOrEmpty(inPowIFStr) || inPowIFStr == "-") {
+                    log("warning: empty row, skipping", false);
+                    continue;
+                }
+
+                decimal inPowIFGoal = 0;
+                decimal inPowLOGoal = 0;
+                decimal inFreqLO = 0;
+                decimal inFreqLSB = 0;
+                decimal inFreqUSB = 0;
+                decimal inFreqIF = 0;
+
+                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowIFGoal);
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoal);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLO);
+                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLSB);
+                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqUSB);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIF);
+                inFreqLO *= Constants.GHz;
+                inFreqLSB *= Constants.GHz;
+                inFreqUSB *= Constants.GHz;
+                inFreqIF *= Constants.GHz;
+
+                try {
+                    send(GET, "SOUR:FREQ " + inFreqLO);
+                    send(GET, "SOUR:POW " + inPowLOStr);
+                }
+                catch (Exception ex) {
+                    log("error: measure: fail setting LO params, skipping row (" + ex.Message + ")", false);
+                    continue;
+                }
+                //send(IN, ("SOUR:FREQ " + t_freq_IF));
+                //send(IN, ("SOUR:POW " + t_pow_IF.Replace(',', '.')));
+
+                measurePower(row, SA, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
+                measurePower(row, SA, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
+                measurePower(row, SA, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
+                measurePower(row, SA, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
+                prog?.Report((double)i / data.Rows.Count * 100);
+                ++i;
+            }
+            send(SA, ":CAL:AUTO ON");
+            send(GET, "OUTP:STAT OFF");
+            //send(IN, "OUTP:STAT OFF");
+            log("release instrument", false);
+            prog?.Report(100);
+        }
+
+        public void measure_mult(IProgress<double> prog, DataTable data, CancellationToken token) {
+            string IN = m_IN.Location;
+            string OUT = m_OUT.Location;
+
+            prepareInstrument(IN, OUT);
+
+            int i = 0;
+            foreach (DataRow row in data.Rows) {
+                if (token.IsCancellationRequested) {
+                    releaseInstrument(IN, OUT);
+                    token.ThrowIfCancellationRequested();
+                    return;
+                }
+                string inPowGenStr = row["PIN-GEN"].ToString().Replace(',', '.');
+                string inFreqH1Str = row["FH1"].ToString().Replace(',', '.');
+
+                if (string.IsNullOrEmpty(inPowGenStr) || inPowGenStr == "-" ||
+                    string.IsNullOrEmpty(inFreqH1Str) || inFreqH1Str == "-") {
+                    log("warning: empty row, skipping", false);
+                    continue;
+                }
+
+                decimal inPowGoal = 0;
+                decimal inFreqH1 = 0;
+
+                decimal.TryParse(row["PIN-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowGoal);
+                decimal.TryParse(row["FH1"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqH1);
+                inFreqH1 *= Constants.GHz;
+
+                try {
+                    send(IN, "SOUR:POW " + inPowGenStr);
+                    send(IN, "SOUR:FREQ " + inFreqH1);
+                }
+                catch (Exception ex) {
+                    log("error: measure: fail setting IN params, skipping row (" + ex.Message + ")", false);
+                    continue;
+                }
+
+                measurePower(row, OUT, inPowGoal, inFreqH1 * 1, "ATT-H1", "POUT-H1", "CONV-H1", -1, 0);
+                measurePower(row, OUT, inPowGoal, inFreqH1 * 2, "ATT-H2", "POUT-H2", "CONV-H2", -1, 0);
+                measurePower(row, OUT, inPowGoal, inFreqH1 * 3, "ATT-H3", "POUT-H3", "CONV-H3", -1, 0);
+                measurePower(row, OUT, inPowGoal, inFreqH1 * 4, "ATT-H4", "POUT-H4", "CONV-H4", -1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
             releaseInstrument(IN, OUT);
-            send(LO, "OUTP:STAT OFF");
-            log("end measure", false);
             prog?.Report(100);
         }
     }

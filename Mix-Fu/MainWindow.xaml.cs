@@ -1,6 +1,7 @@
 //#define mock
 
 using System;
+using System.CodeDom;
 using System.IO;
 using System.Data;
 using System.Linq;
@@ -16,6 +17,7 @@ using Agilent.CommandExpert.ScpiNet.Ag34410_2_35;
 using Agilent.CommandExpert.ScpiNet.Ag90x0_SA_A_08_03;
 using System.Diagnostics;
 using System.Media;
+using System.Text;
 
 namespace Mixer {
 
@@ -49,8 +51,6 @@ namespace Mixer {
 #region regDataMembers
         // TODO: switch TryParse overloads
         // TODO: learn АКИП syntax
-        // TODO: write logs to a file
-        // TODO: cancel tasks
         // TODO: autoscroll table
 
         // TODO: progressbar for calibration and measurements
@@ -66,21 +66,22 @@ namespace Mixer {
         decimal span = 10*Constants.MHz;
         bool verbose = false;
         MeasureMode mode = MeasureMode.modeDSBDown;
-        SoundPlayer sndAlert = new SoundPlayer(@"d:\alert.wav");
-
-        NumberStyles style = NumberStyles.Any;
+        SoundPlayer sndAlert = new SoundPlayer(@".\alert.wav");
 
         private Task searchTask;
         private Task calibrationTask;
         private Task measureTask;
         private Progress<double> progressHandler;
 
+        private FileInfo logFileInfo;
+
         InstrumentManager instrumentManager;
 
-        CancellationTokenSource searchTokenSource = new CancellationTokenSource();
-        CancellationTokenSource calibrationTokenSource = new CancellationTokenSource();
+        private CancellationTokenSource searchTokenSource;
+        private CancellationTokenSource calibrationTokenSource;
+        private CancellationTokenSource measureTokenSource;
 
-#endregion regDataMembers
+        #endregion regDataMembers
 
         public MainWindow() {
             instrumentManager = new InstrumentManager(log);
@@ -93,6 +94,8 @@ namespace Mixer {
 
             progressHandler = new Progress<double>();
             progressHandler.ProgressChanged += (sender, value) => { pbTaskStatus.Value = value; };
+
+            sndAlert.LoadAsync();
 
             //            listInstruments.Add(new Instrument { Location = "GPIB0::20::INSTR", Name = "IN", FullName = "GPIB0::20::INSTR" });
             //            listInstruments.Add(new Instrument { Location = "GPIB0::18::INSTR", Name = "OUT", FullName = "GPIB0::18::INSTR" });
@@ -108,6 +111,24 @@ namespace Mixer {
 #endif
 
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+
+            var logDir = new DirectoryInfo(@".\logs\");
+            logFileInfo = new FileInfo(@".\logs\log-" + DateTime.Today.ToString("yyyy-MM-dd") + ".txt");
+            try {
+                if (!logDir.Exists) {
+                    logDir.Create();
+                }
+                using (var f = new StreamWriter(logFileInfo.FullName, true)) {
+                    f.Write("\n========================================================================");
+                    f.Write("\nStart session: " + DateTime.Today.ToString("yyyy-MM-dd") +
+                                DateTime.Now.ToShortTimeString());
+                    f.Write("\n------------------------------------------------------------------------");
+                }
+            }
+            catch (Exception ex) {
+                MessageBox.Show("Error: " + ex.Message);
+                Environment.Exit(1);
+            }
         }
 
         #region regUiEvents
@@ -181,7 +202,7 @@ namespace Mixer {
             }
         }
 
-        // misc buttons
+        // search buttons
         private async void btnSearchClicked(object sender, RoutedEventArgs e) {
             if (searchTask != null && !searchTask.IsCompleted) {
                 MessageBox.Show("Instrument search is already running.");
@@ -190,28 +211,32 @@ namespace Mixer {
             btnSearch.Visibility = Visibility.Hidden;
             btnStopSearch.Visibility = Visibility.Visible;
 
-            int max_port = Convert.ToInt32(textBox_number_maxport.Text);
+            int maxPort = Convert.ToInt32(textBox_number_maxport.Text);
             int gpib = Convert.ToInt32(textBox_number_GPIB.Text);
+            searchTokenSource = new CancellationTokenSource();
             CancellationToken token = searchTokenSource.Token;
 
             listInstruments.Clear();
 
             try {
                 var progress = progressHandler as IProgress<double>;
-                searchTask = Task.Factory.StartNew(
-                    () => instrumentManager.searchInstruments(progress, listInstruments, max_port, gpib, token), token);
+                searchTask = Task.Run(
+                    () => instrumentManager.searchInstruments(progress, listInstruments, maxPort, gpib, token), token);
                 await searchTask;
             }
-            catch (TaskCanceledException ex) {
-                log(ex.Message);
+            catch (Exception ex) {
+                log("error: " + ex.Message);
             }
+            finally {
+//                searchTask?.Dispose();
 
-            comboIN.Items.Refresh();
-            comboOUT.Items.Refresh();
-            comboLO.Items.Refresh();
+                comboIN.Items.Refresh();
+                comboOUT.Items.Refresh();
+                comboLO.Items.Refresh();
 
-            btnStopSearch.Visibility = Visibility.Hidden;
-            btnSearch.Visibility = Visibility.Visible;
+                btnStopSearch.Visibility = Visibility.Hidden;
+                btnSearch.Visibility = Visibility.Visible;
+            }
         }
 
         private void btnStopSearchClicked(object sender, RoutedEventArgs e) {
@@ -220,6 +245,7 @@ namespace Mixer {
             }
         }
 
+        // manual command buttons
         private void btnRunQueryClicked(object sender, RoutedEventArgs e) {
             if (comboOUT.SelectedIndex == -1) {
                 MessageBox.Show("Error: no OUT instrument set");
@@ -322,8 +348,11 @@ namespace Mixer {
                 return;
             }
             var progress = progressHandler as IProgress<double>;
+            calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
-            calibrate(() => instrumentManager.calibrateIn(progress, dataTable, instrumentManager.inParameters[mode], token));
+            calibrate(
+                () => instrumentManager.calibrateIn(progress, dataTable, instrumentManager.inParameters[mode], token),
+                token);
         }
 
         private void btnCalibrateOutClicked(object sender, RoutedEventArgs e) {
@@ -333,7 +362,11 @@ namespace Mixer {
                 return;
             }
             var progress = progressHandler as IProgress<double>;
-            calibrate(() => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode], mode));
+            calibrationTokenSource = new CancellationTokenSource();
+            CancellationToken token = calibrationTokenSource.Token;
+            calibrate(
+                () => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode],
+                    mode, token), token);
         }
 
         private void btnCalibrateLoClicked(object sender, RoutedEventArgs e) {
@@ -347,11 +380,19 @@ namespace Mixer {
                 return;
             }
             var progress = progressHandler as IProgress<double>;
+            calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
-            calibrate(() => instrumentManager.calibrateLo(progress, dataTable, instrumentManager.loParameters, token));
+            calibrate(() => instrumentManager.calibrateLo(progress, dataTable, instrumentManager.loParameters, token), token);
         }
 
-        // measure button
+        private void btnCancelCalibrationClicked(object sender, RoutedEventArgs e) {
+            if (calibrationTask != null && !calibrationTask.IsCompleted) {
+                calibrationTokenSource.Cancel();
+            }
+//            log("cancel calibrate", false);
+        }
+
+        // measure buttons
         private void btnMeasureClicked(object sender, RoutedEventArgs e) {
             try {
                 if (!canMeasure()) {
@@ -366,29 +407,45 @@ namespace Mixer {
             }
         }
 
+        private void btnCancelMeasureClicked(object sender, RoutedEventArgs e) {
+            if (measureTask != null && !measureTask.IsCompleted) {
+                measureTokenSource.Cancel();
+            }
+        }
+        // main window closed
+        private void onMainWindowClose(object sender, System.ComponentModel.CancelEventArgs e) {
+            try {
+                if (logFileInfo.Exists) {
+                    using (var f = logFileInfo.AppendText()) {
+                        f.Write("\n------------------------------------------------------------------------");
+                        f.Write("\nEnd session: " + DateTime.Today.ToString("yyyy-MM-dd") +
+                                DateTime.Now.ToShortTimeString());
+                        f.Write("\n========================================================================");
+                    }
+                }
+            }
+            catch (Exception) {
+//                Environment.Exit(1);
+            }
+        }
+
 #endregion regUiEvents
 
 #region regUtility
 
         public void log(string mes, bool onlyVerbose = false) {
             if (!onlyVerbose | onlyVerbose & verbose) {
-                Dispatcher.Invoke((Action)delegate () {
-                    textLog.Text += "\n" + "[" + DateTime.Now.ToShortTimeString() + "]: " + mes;
+                string logStr = "\n" + "[" + DateTime.Now.ToShortTimeString() + "]: " + mes;
+                Dispatcher.Invoke((Action<string>)delegate(string str) {
+                    textLog.Text += str;
                     scrollviewer.ScrollToBottom();
-                });
+                    if (logFileInfo.Exists) {
+                        using (var f = File.AppendText(logFileInfo.FullName)) {
+                            f.Write(str);
+                        }
+                    }
+                },  logStr);
             }
-        }
-
-        public object cell2dec(string value) {
-            decimal a;
-            try {
-                a = decimal.Parse(value, NumberStyles.Any, CultureInfo.InvariantCulture);
-            }
-            catch (Exception ex) {
-                log("error: decimal parse error:" + ex.Message);
-                return value;
-            }
-            return a;
         }
 
 #endregion regUtility
@@ -396,7 +453,7 @@ namespace Mixer {
 #region regDataManager
 
         public static DataTable getDataTableFromExcel(string path, bool hasHeader = true) {
-            using (var package = new OfficeOpenXml.ExcelPackage()) {
+            using (var package = new ExcelPackage()) {
                 using (var stream = File.OpenRead(path)) {
                     package.Load(stream);
                 }
@@ -412,7 +469,7 @@ namespace Mixer {
                     foreach (var cell in wsRow) {
                         row[cell.Start.Column - 1] = cell.Value.ToString().Replace(".", ",");
                     }
-                }
+                } 
                 return dataTable;
             }
         }
@@ -461,23 +518,34 @@ namespace Mixer {
             return true;
         }
 
-        public async void calibrate(Action func) {
+        public async void calibrate(Action func, CancellationToken token) {
+            btnCancelCalibration.Visibility = Visibility.Visible;
+            btnCalibrateIn.Visibility = Visibility.Hidden;
+            btnCalibrateOut.Visibility = Visibility.Hidden;
+            btnCalibrateLo.Visibility = Visibility.Hidden;
             log("start calibrate: " + mode);
             var stopwatch = Stopwatch.StartNew();
 
-            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
+            dataTable = ((DataView) dataGrid.ItemsSource).ToTable();
 
-//            calibrationTask = Task.Factory.StartNew(func);
-            calibrationTask = Task.Run(func);
-            await calibrationTask;
-
-            dataGrid.ItemsSource = dataTable.AsDataView();
-
-            stopwatch.Stop();
-            log("run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
-            log("end calibrate");
-            sndAlert.Play();
-            MessageBox.Show("Task complete.");
+            try {
+                calibrationTask = Task.Run(func, token);
+                dataGrid.ItemsSource = dataTable.AsDataView();
+                await calibrationTask;
+            }
+            catch (Exception ex) {
+                log("error: " + ex.Message);
+            }
+            finally {
+                stopwatch.Stop();
+                log("end calibrate, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
+                sndAlert.Play();
+                MessageBox.Show("Done.");
+                btnCancelCalibration.Visibility = Visibility.Hidden;
+                btnCalibrateIn.Visibility = Visibility.Visible;
+                btnCalibrateOut.Visibility = Visibility.Visible;
+                btnCalibrateLo.Visibility = Visibility.Visible;
+            }
         }
 
 #endregion regCalibrationManager
@@ -509,237 +577,55 @@ namespace Mixer {
         }
 
         public async void measure() {
+            btnMeasure.Visibility = Visibility.Hidden;
+            btnCancelMeasure.Visibility = Visibility.Visible;
             log("start measure: " + mode);
             var stopwatch = Stopwatch.StartNew();
-
+//            dataGrid.ScrollIntoView();
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
+            measureTokenSource = new CancellationTokenSource();
+            CancellationToken token = measureTokenSource.Token;
+
             var progress = progressHandler as IProgress<double>;
-            switch (mode) {
-                case MeasureMode.modeDSBDown:
-                    measureTask = Task.Factory.StartNew(() => instrumentManager.measure_mix_DSB_down(progress, dataTable));
-                    break;
-                case MeasureMode.modeDSBUp:
-                    measureTask = Task.Factory.StartNew(() => instrumentManager.measure_mix_DSB_up(progress, dataTable));
-                    break;
-                case MeasureMode.modeSSBDown:
-                    measureTask = Task.Factory.StartNew(() => measure_mix_SSB_down(progress, dataTable));
-                    break;
-                case MeasureMode.modeSSBUp:
-                    measureTask = Task.Factory.StartNew(() => measure_mix_SSB_up(progress, dataTable));
-                    break;
-                case MeasureMode.modeMultiplier:
-                    measureTask = Task.Factory.StartNew(() => measure_mult(progress, dataTable));
-                    break;
-                default:
-                    return;
+            try {
+                switch (mode) {
+                    case MeasureMode.modeDSBDown:
+                        measureTask = Task.Run(() =>
+                            instrumentManager.measure_mix_DSB_down(progress, dataTable, token), token);
+                        break;
+                    case MeasureMode.modeDSBUp:
+                        measureTask = Task.Run(() =>
+                            instrumentManager.measure_mix_DSB_up(progress, dataTable, token), token);
+                        break;
+                    case MeasureMode.modeSSBDown:
+                        measureTask = Task.Run(() => instrumentManager.measure_mix_SSB_down(progress, dataTable, token), token);
+                        break;
+                    case MeasureMode.modeSSBUp:
+                        measureTask = Task.Run(() => instrumentManager.measure_mix_SSB_up(progress, dataTable, token), token);
+                        break;
+                    case MeasureMode.modeMultiplier:
+                        measureTask = Task.Run(() => instrumentManager.measure_mult(progress, dataTable, token), token);
+                        break;
+                    default:
+                        return;
+                }
+                dataGrid.ItemsSource = dataTable.AsDataView();
+                await measureTask;
             }
-
-            dataGrid.ItemsSource = dataTable.AsDataView();
-            
-            await measureTask;
-            stopwatch.Stop();
-            log("end measure");
-            log("run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
-            sndAlert.Play();
-            MessageBox.Show("Task complete.");
-        }
-
-        public void measure_mix_SSB_down(IProgress<double> prog, DataTable data) {
-            string IN = instrumentManager.m_IN.Location;
-            string OUT = instrumentManager.m_OUT.Location;
-            string LO = instrumentManager.m_LO.Location;
-
-            instrumentManager.prepareInstrument(IN, OUT);
-            instrumentManager.send(LO, "OUTP:STAT ON");
-
-            int i = 0;
-            foreach (DataRow row in data.Rows) {
-                string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
-                string inPowLSBStr = row["PLSB"].ToString().Replace(',', '.');
-                string inPowUSBStr = row["PUSB"].ToString().Replace(',', '.');
-                decimal inFreqLODec = 0;
-                decimal inFreqLSBDec = 0;
-                decimal inFreqUSBDec = 0;
-                decimal inFreqIFDec = 0;
-                decimal inPowLSBGoalDec = 0;
-                decimal inPowUSBGoalDec = 0;
-                decimal inPowLOGoalDec = 0;
-
-                if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
-                    string.IsNullOrEmpty(inPowLSBStr) || inPowLSBStr == "-" ||
-                    string.IsNullOrEmpty(inPowUSBStr) || inPowUSBStr == "-") {
-                    log("warning: empty row, skipping", false);
-                    continue;
-                }
-
-                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoalDec);
-                decimal.TryParse(row["PUSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowUSBGoalDec);
-                decimal.TryParse(row["PLSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLSBGoalDec);
-                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLODec);
-                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIFDec);
-                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqUSBDec);
-                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLSBDec);
-
-                inFreqLODec *= Constants.GHz;
-                inFreqIFDec *= Constants.GHz;
-                inFreqLSBDec *= Constants.GHz;
-                inFreqUSBDec *= Constants.GHz;
-
-                // TODO: extract freq-pow setting method, add exception handling
-                try {
-                    instrumentManager.send(LO, "SOUR:FREQ " + inFreqLODec);
-                    instrumentManager.send(LO, "SOUR:POW " + inPowLOStr);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting LO params, skipping row (" + ex.Message + ")", false);
-                    continue;
-                }
-                instrumentManager.measurePower(row, OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
-
-                try {
-                    instrumentManager.send(IN, "SOUR:FREQ " + inFreqLSBDec);
-                    instrumentManager.send(IN, "SOUR:POW " + inPowLSBStr);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting IN LSB params, skipping row (" + ex.Message + ")", false);
-                    continue;
-                }
-                instrumentManager.measurePower(row, OUT, inPowLSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-LSB", -1, -3);
-                instrumentManager.measurePower(row, OUT, inPowLSBGoalDec, inFreqLSBDec, "ATT-LSB", "POUT-LSB", "ISO-LSB", 1, 0);
-
-                try {
-                    instrumentManager.send(IN, "SOUR:FREQ " + inFreqUSBDec);
-                    instrumentManager.send(IN, "SOUR:POW " + inPowUSBStr);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting IN USB params, skipping row (" + ex.Message + ")", false);
-                    continue;
-                }
-                instrumentManager.measurePower(row, OUT, inPowUSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-USB", -1, -3);
-                instrumentManager.measurePower(row, OUT, inPowUSBGoalDec, inFreqUSBDec, "ATT-USB", "POUT-USB", "ISO-USB", 1, 0);
-
-                prog?.Report((double)i / data.Rows.Count * 100);
-                ++i;
+            catch (Exception ex) {
+                log("error: " + ex.Message);
             }
-            instrumentManager.releaseInstrument(IN, OUT);
-            instrumentManager.send(LO, "OUTP:STAT OFF");
-            prog?.Report(100);
-        }
-
-        public void measure_mix_SSB_up(IProgress<double> prog, DataTable data) {
-//            string IN = instrumentManager.m_IN.Location;
-            string OUT = instrumentManager.m_OUT.Location;
-            string LO = instrumentManager.m_LO.Location;
-
-            instrumentManager.send(OUT, ":CAL:AUTO OFF");
-            instrumentManager.send(OUT, ":SENS:FREQ:SPAN 1000000");
-            instrumentManager.send(OUT, ":CALC:MARK1:MODE POS");
-            instrumentManager.send(OUT, ":POW:ATT " + attenuation);
-            //instrumentManager.send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            instrumentManager.send(LO, "OUTP:STAT ON");
-            //instrumentManager.send(IN, ("OUTP:STAT ON"));
-
-            int i = 0;
-            foreach (DataRow row in data.Rows) {
-                string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
-                string inPowIFStr = row["PIF"].ToString().Replace(',', '.');
-
-                if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
-                    string.IsNullOrEmpty(inPowIFStr) || inPowIFStr == "-") {
-                    log("warning: empty row, skipping", false);
-                    continue;
-                }
-
-                decimal inPowIFGoal = 0;
-                decimal inPowLOGoal = 0;
-                decimal inFreqLO = 0;
-                decimal inFreqLSB = 0;
-                decimal inFreqUSB = 0;
-                decimal inFreqIF = 0;
-
-                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowIFGoal);
-                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoal);
-                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLO);
-                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLSB);
-                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqUSB);
-                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIF);
-                inFreqLO *= Constants.GHz;
-                inFreqLSB *= Constants.GHz;
-                inFreqUSB *= Constants.GHz;
-                inFreqIF *= Constants.GHz;
-
-                try {
-                    instrumentManager.send(LO, "SOUR:FREQ " + inFreqLO);
-                    instrumentManager.send(LO, "SOUR:POW " + inPowLOStr);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting LO params, skipping row (" + ex.Message + ")", false);
-                    continue;
-                }
-                //send(IN, ("SOUR:FREQ " + t_freq_IF));
-                //send(IN, ("SOUR:POW " + t_pow_IF.Replace(',', '.')));
-
-                instrumentManager.measurePower(row, OUT, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
-                instrumentManager.measurePower(row, OUT, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
-                instrumentManager.measurePower(row, OUT, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
-                instrumentManager.measurePower(row, OUT, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
-
-                prog?.Report((double)i / data.Rows.Count * 100);
-                ++i;
+            finally {
+                stopwatch.Stop();
+                log("end measure, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
+                sndAlert.Play();
+                MessageBox.Show("Task complete.");
+                btnMeasure.Visibility = Visibility.Visible;
+                btnCancelMeasure.Visibility = Visibility.Hidden;
             }
-            instrumentManager.send(OUT, ":CAL:AUTO ON");
-            instrumentManager.send(LO, "OUTP:STAT OFF");
-            //send(IN, "OUTP:STAT OFF");
-            prog?.Report(100);
-        }
-
-        public void measure_mult(IProgress<double> prog, DataTable data) {
-            string IN = instrumentManager.m_IN.Location;
-            string OUT = instrumentManager.m_OUT.Location;
-
-            instrumentManager.prepareInstrument(IN, OUT);
-
-            int i = 0;
-            foreach (DataRow row in data.Rows) {
-                string inPowGenStr = row["PIN-GEN"].ToString().Replace(',', '.');
-                string inFreqH1Str = row["FH1"].ToString().Replace(',', '.');
-
-                if (string.IsNullOrEmpty(inPowGenStr) || inPowGenStr == "-" ||
-                    string.IsNullOrEmpty(inFreqH1Str) || inFreqH1Str == "-") {
-                    log("warning: empty row, skipping", false);
-                    continue;
-                }
-
-                decimal inPowGoal = 0;
-                decimal inFreqH1 = 0;
-
-                decimal.TryParse(row["PIN-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowGoal);
-                decimal.TryParse(row["FH1"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqH1);
-                inFreqH1 *= Constants.GHz;
-
-                try {
-                    instrumentManager.send(IN, "SOUR:POW " + inPowGenStr);
-                    instrumentManager.send(IN, "SOUR:FREQ " + inFreqH1);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting IN params, skipping row (" + ex.Message + ")", false);
-                    continue;
-                }
-
-                instrumentManager.measurePower(row, OUT, inPowGoal, inFreqH1*1, "ATT-H1", "POUT-H1", "CONV-H1", -1, 0);
-                instrumentManager.measurePower(row, OUT, inPowGoal, inFreqH1*2, "ATT-H2", "POUT-H2", "CONV-H2", -1, 0);
-                instrumentManager.measurePower(row, OUT, inPowGoal, inFreqH1*3, "ATT-H3", "POUT-H3", "CONV-H3", -1, 0);
-                instrumentManager.measurePower(row, OUT, inPowGoal, inFreqH1*4, "ATT-H4", "POUT-H4", "CONV-H4", -1, 0);
-
-                prog?.Report((double)i / data.Rows.Count * 100);
-                ++i;
-            }
-            instrumentManager.releaseInstrument(IN, OUT);
-            prog?.Report(100);
         }
 
 #endregion regMeasurementManager
-
     }
 }
