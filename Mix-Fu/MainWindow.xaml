@@ -1,11 +1,11 @@
-﻿<Window x:Class="Mix_Fu.MainWindow"
+﻿<Window x:Class="Mixer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Mix_Fu"
+        xmlns:local="clr-namespace:Mixer"
         mc:Ignorable="d"
-        Title="Mixer+" Height="420" Width="614" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterScreen" MinWidth="520" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="390" Background="White">
+        Title="Mixer+" Height="420" Width="614" SizeToContent="WidthAndHeight" WindowStartupLocation="CenterScreen" MinWidth="520" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="390" Background="White" Closing="onMainWindowClose">
     <Window.Resources>
         <DataTemplate DataType="{x:Type local:Instrument}" >
             <StackPanel Orientation="Vertical" Background="{x:Null}">
@@ -138,5 +138,17 @@
             <TextBlock x:Name="textLog" TextWrapping="Wrap" FontSize="9.333" TextDecorations="{x:Null}" Margin="2" Text="Ready"/>
         </ScrollViewer>
         <CheckBox x:Name="LogVerbose" Content="developer mode" HorizontalAlignment="Left" Margin="5,210,0,0" Grid.Row="1" VerticalAlignment="Top" Grid.ColumnSpan="2" Width="203" Click="LogVerboseToggled"/>
+        <ProgressBar x:Name="pbTaskStatus" Height="11" Margin="1,213,1,0" Grid.Row="1" VerticalAlignment="Top" Grid.Column="2"/>
+        <Button x:Name="btnCancelCalibration" Content="Cancel" HorizontalContentAlignment="Center" Padding="0,-1,0,0" FontSize="10.667" FontWeight="Bold" Click="btnCancelCalibrationClicked" Margin="1,2,1,0" Height="94" VerticalAlignment="Top" Grid.Column="3" Grid.Row="1" Visibility="Hidden">
+            <Button.Background>
+                <LinearGradientBrush EndPoint="0,1" StartPoint="0,0">
+                    <GradientStop Color="#FFFFE2E2" Offset="0"/>
+                    <GradientStop Color="#FFD4D4D4" Offset="0.5"/>
+                    <GradientStop Color="#FFD6D3D3" Offset="0.5"/>
+                    <GradientStop Color="#FFFFE7E7" Offset="1"/>
+                </LinearGradientBrush>
+            </Button.Background>
+        </Button>
+        <Button x:Name="btnCancelMeasure" Content="Cancel" RenderTransformOrigin="0.5,0.5" Click="btnCancelMeasureClicked" BorderBrush="#FF707070" BorderThickness="1" ForceCursor="True" Grid.Column="4" Padding="0" FontWeight="Bold" Margin="1,2,7,0" Grid.Row="1" Height="127" VerticalAlignment="Top" Background="#FF506470" Visibility="Hidden"/>
     </Grid>
 </Window>
