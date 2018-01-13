@@ -53,9 +53,6 @@ namespace Mixer {
         // TODO: learn АКИП syntax
         // TODO: autoscroll table
 
-        // TODO: progressbar for calibration and measurements
-        // TODO: learn АКИП syntax
-
         List<Instrument> listInstruments = new List<Instrument>();
 
         DataTable dataTable;
@@ -66,7 +63,9 @@ namespace Mixer {
         decimal span = 10*Constants.MHz;
         bool verbose = false;
         MeasureMode mode = MeasureMode.modeDSBDown;
-        SoundPlayer sndAlert = new SoundPlayer(@".\alert.wav");
+
+        private const string alert_filename = @".\alert.wav";
+        private SoundPlayer sndAlert;
 
         private Task searchTask;
         private Task calibrationTask;
@@ -95,7 +94,10 @@ namespace Mixer {
             progressHandler = new Progress<double>();
             progressHandler.ProgressChanged += (sender, value) => { pbTaskStatus.Value = value; };
 
-            sndAlert.LoadAsync();
+            if (File.Exists(alert_filename)) {
+                sndAlert = new SoundPlayer(alert_filename);
+                sndAlert.LoadAsync();
+            }
 
             //            listInstruments.Add(new Instrument { Location = "GPIB0::20::INSTR", Name = "IN", FullName = "GPIB0::20::INSTR" });
             //            listInstruments.Add(new Instrument { Location = "GPIB0::18::INSTR", Name = "OUT", FullName = "GPIB0::18::INSTR" });
@@ -539,7 +541,7 @@ namespace Mixer {
             finally {
                 stopwatch.Stop();
                 log("end calibrate, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
-                sndAlert.Play();
+                sndAlert?.Play();
                 MessageBox.Show("Done.");
                 btnCancelCalibration.Visibility = Visibility.Hidden;
                 btnCalibrateIn.Visibility = Visibility.Visible;
@@ -619,7 +621,7 @@ namespace Mixer {
             finally {
                 stopwatch.Stop();
                 log("end measure, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
-                sndAlert.Play();
+                sndAlert?.Play();
                 MessageBox.Show("Task complete.");
                 btnMeasure.Visibility = Visibility.Visible;
                 btnCancelMeasure.Visibility = Visibility.Hidden;
