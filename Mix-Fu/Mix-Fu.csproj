@@ -84,33 +84,51 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Ag34410_2_35">
-      <HintPath>C:\Program Files\Keysight\dll\Ag34410_2_35.dll</HintPath>
+      <HintPath>..\..\dll\Ag34410_2_35.dll</HintPath>
     </Reference>
     <Reference Include="Ag90x0_SA_A_08_03">
-      <HintPath>C:\Program Files\Keysight\dll\Ag90x0_SA_A_08_03.dll</HintPath>
+      <HintPath>..\..\dll\Ag90x0_SA_A_08_03.dll</HintPath>
     </Reference>
-    <Reference Include="Agilent.CommandExpert.DataModel, Version=1.4.944.0, Culture=neutral, PublicKeyToken=b51aac182336bfb6">
-      <HintPath>C:\Program Files\Keysight\dll\Agilent.CommandExpert.DataModel.dll</HintPath>
+    <Reference Include="Agilent.CommandExpert.Addons, Version=1.7.153.0, Culture=neutral, PublicKeyToken=d1f7a9283d8ccbb3, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files (x86)\Keysight\Command Expert\Agilent.CommandExpert.Addons.dll</HintPath>
     </Reference>
-    <Reference Include="Agilent.CommandExpert.InstrumentAbstraction, Version=1.4.944.0, Culture=neutral, PublicKeyToken=c5e9dbe29758600c">
-      <HintPath>C:\Program Files\Keysight\dll\Agilent.CommandExpert.InstrumentAbstraction.dll</HintPath>
+    <Reference Include="Agilent.CommandExpert.Addons.LabVIEW, Version=1.0.0.0, Culture=neutral, PublicKeyToken=50c69b195c326924, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files (x86)\Keysight\Command Expert\Agilent.CommandExpert.Addons.LabVIEW.dll</HintPath>
+    </Reference>
+    <Reference Include="Agilent.CommandExpert.Addons.VEE">
+      <HintPath>C:\Program Files (x86)\Keysight\Command Expert\Agilent.CommandExpert.Addons.VEE.dll</HintPath>
+    </Reference>
+    <Reference Include="Agilent.CommandExpert.CommandExpertLib, Version=1.7.153.0, Culture=neutral, PublicKeyToken=9cd29450398cf653, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files (x86)\Keysight\Command Expert\Agilent.CommandExpert.CommandExpertLib.dll</HintPath>
+    </Reference>
+    <Reference Include="Agilent.CommandExpert.Common, Version=1.7.153.0, Culture=neutral, PublicKeyToken=28d97c1d51edd354, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files (x86)\Keysight\Command Expert\Agilent.CommandExpert.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="Agilent.CommandExpert.InstrumentAbstraction, Version=1.7.153.0, Culture=neutral, PublicKeyToken=c5e9dbe29758600c, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\dll\Agilent.CommandExpert.InstrumentAbstraction.dll</HintPath>
+    </Reference>
+    <Reference Include="Agilent.CommandExpert.Scpi, Version=1.7.153.0, Culture=neutral, PublicKeyToken=ed482193fb91fd28, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files (x86)\Keysight\Command Expert\Agilent.CommandExpert.Scpi.dll</HintPath>
+    </Reference>
+    <Reference Include="Agilent.CommandExpert.SequenceExecution, Version=1.7.153.0, Culture=neutral, PublicKeyToken=974178d81104e6cf, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\Program Files (x86)\Keysight\Command Expert\Agilent.CommandExpert.SequenceExecution.dll</HintPath>
     </Reference>
     <Reference Include="Agilent.TMFramework.InternalUtils.WinForms, Version=2.0.10124.0, Culture=neutral, PublicKeyToken=7a01cdb2a9131f73, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\Program Files\Agilent\IO Libraries Suite\Agilent.TMFramework.InternalUtils.WinForms.dll</HintPath>
     </Reference>
-    <Reference Include="AgMXG_A_01_80">
-      <HintPath>C:\Program Files\Keysight\dll\AgMXG_A_01_80.dll</HintPath>
-    </Reference>
     <Reference Include="AgSCPI99_1_0">
-      <HintPath>C:\Program Files\Keysight\dll\AgSCPI99_1_0.dll</HintPath>
+      <HintPath>..\..\dll\AgSCPI99_1_0.dll</HintPath>
     </Reference>
     <Reference Include="EPPlus">
-      <HintPath>C:\Program Files\Keysight\dll\EPPlus.dll</HintPath>
-    </Reference>
-    <Reference Include="Interop.HMCSynthLib">
-      <HintPath>C:\Program Files\Keysight\dll\Interop.HMCSynthLib.dll</HintPath>
-      <EmbedInteropTypes>True</EmbedInteropTypes>
+      <HintPath>..\..\dll\EPPlus.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data" />

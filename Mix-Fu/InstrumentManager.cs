@@ -1,4 +1,4 @@
-//#define mock
+#define mock
 
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 using System;
@@ -133,7 +133,7 @@ namespace Mixer {
             return answer;
         }
 #endif
-        public void searchInstruments(IProgress<double> prog, List<Instrument> instruments, int maxPort, int gpib, CancellationToken token) {
+        public void searchInstruments(IProgress<double> prog, List<IInstrument> instruments, int maxPort, int gpib, CancellationToken token) {
             log("start instrument search...", false);
 
             for (int i = 0; i <= maxPort; i++) {

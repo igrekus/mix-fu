@@ -1,4 +1,4 @@
-//#define mock
+#define mock
 
 using System;
 using System.CodeDom;
@@ -17,6 +17,7 @@ using Agilent.CommandExpert.ScpiNet.Ag34410_2_35;
 using Agilent.CommandExpert.ScpiNet.Ag90x0_SA_A_08_03;
 using System.Diagnostics;
 using System.Media;
+using System.Security.RightsManagement;
 using System.Text;
 
 namespace Mixer {
@@ -35,13 +36,20 @@ namespace Mixer {
         modeMultiplier
     };
 
-    public class Instrument {
+    interface IInstrument {
+        string Location { get; set; }
+        string Name     { get; set; }
+        string FullName { get; set; }
+    }
+
+    public class Instrument : IInstrument {
         public string Location { get; set; }
         public string Name { get; set; }
         public string FullName { get; set; }
+
         public override string ToString() {
             return base.ToString() + ": " + "loc: " + Location +
-                                            " name:" + Name +
+                                            " _name:" + Name +
                                             " fname:" + FullName;
         }
     }
@@ -50,10 +58,10 @@ namespace Mixer {
 
 #region regDataMembers
         // TODO: switch TryParse overloads
-        // TODO: learn АКИП syntax
         // TODO: autoscroll table
+        // TODO: write calibration type to logs
 
-        List<Instrument> listInstruments = new List<Instrument>();
+        List<IInstrument> listInstruments = new List<IInstrument>();
 
         DataTable dataTable;
         string inFile = "";
@@ -80,10 +88,12 @@ namespace Mixer {
         private CancellationTokenSource calibrationTokenSource;
         private CancellationTokenSource measureTokenSource;
 
-        #endregion regDataMembers
+#endregion regDataMembers
 
         public MainWindow() {
             instrumentManager = new InstrumentManager(log);
+
+            DataContext = listInstruments;
 
             InitializeComponent();
 
@@ -133,7 +143,7 @@ namespace Mixer {
             }
         }
 
-        #region regUiEvents
+#region regUiEvents
 
         // options
         private void listBox_SelectionChanged(object sender, SelectionChangedEventArgs e) {
