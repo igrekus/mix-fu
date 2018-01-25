@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
+using System.Resources;
+using System.Runtime.InteropServices;
 using System.Threading;
 
 namespace Mixer {
@@ -16,12 +18,29 @@ namespace Mixer {
     }
 
     class InstrumentManager {
+        // instrument class dict
+        private Dictionary<string, Func<string, string, Instrument>> instrumentRegistry =
+            new Dictionary<string, Func<string, string, Instrument>> {
+                                                                         {
+                                                                             "N9030A",
+                                                                             (loc, idn) => new Analyzer(loc, idn)
+                                                                         }, {
+                                                                             "GEN",
+                                                                             (loc, idn) => new Generator(loc, idn)
+                                                                         }, {
+                                                                             "LO",
+                                                                             (loc, idn) => new Generator(loc, idn)
+                                                                         }
+                                                                     };
+        
+        // instrument list
+        public List<IInstrument> listInstruments = new List<IInstrument>();
+
         // parameter lists
         public Dictionary<MeasureMode, List<Tuple<string, string>>> outParameters;
         public Dictionary<MeasureMode, ParameterStruct> inParameters;
         public ParameterStruct loParameters;
 
-        // TODO: make instrument classes: Generator, Analyser, hide queries there into methods
         public Instrument m_IN { get; set; }
         public Instrument m_OUT { get; set; }
         public Instrument m_LO { get; set; }
@@ -34,14 +53,6 @@ namespace Mixer {
         private Action<string, bool> log;   // TODO: make logger class
 
         public InstrumentManager(Action<string, bool> logger) {
-            log = logger;
-            initParameterLists();
-        }
-
-        public InstrumentManager(Action<string, bool> logger, Instrument IN, Instrument OUT, Instrument LO) {
-            m_IN = IN;
-            m_OUT = OUT;
-            m_LO = LO;
             log = logger;
             initParameterLists();
         }
@@ -93,12 +104,6 @@ namespace Mixer {
             outParameters.Add(MeasureMode.modeMultiplier, multiplier);
         }
 
-        public void setInstruments(Instrument IN, Instrument OUT, Instrument LO) {
-            m_IN = IN;
-            m_OUT = OUT;
-            m_LO = LO;
-        }
-
 #if mock
         public void send(string location, string command) {
             log("send: " + command + " to: " + location, true);
@@ -133,7 +138,30 @@ namespace Mixer {
             return answer;
         }
 #endif
-        public void searchInstruments(IProgress<double> prog, List<IInstrument> instruments, int maxPort, int gpib, CancellationToken token) {
+        private string testLocation(string location) {
+#if mock
+            var          rnd = new Random();
+            var lst = new List<string> {
+                                           "Agilent Technoligies,N9030A,MY49432146,A.11.04",
+                                           "AAAA,GEN,1111",
+                                           "BBBB,LO,2222",
+                                       };
+            return lst[rnd.Next(lst.Count)];
+#else
+            try {
+                using (var instrument = new AgSCPI99(location)) {
+                    instrument.Transport.Query.Invoke("*IDN?", out var answer);
+                    return answer;
+                }
+            }
+            catch (Exception ex) {
+                log("search error: " + ex.Message, false);
+            }
+            return "";
+#endif
+        }
+        
+        public void searchInstruments(IProgress<double> prog, int maxPort, int gpib, CancellationToken token) {
             log("start instrument search...", false);
 
             for (int i = 0; i <= maxPort; i++) {
@@ -142,25 +170,29 @@ namespace Mixer {
                     return;
                 }
                 string location = "GPIB" + gpib + "::" + i + "::INSTR";
-                log("try " + location, false);
+                log("trying " + location, false);
 
-                try {
-                    string idn = query(location, "*IDN?");
-                    instruments.Add(new Instrument { Location = location, Name = idn.Split(',')[1], FullName = idn });
-                    log("found " + idn + " at " + location, false);
+                // TODO: query dummy instrument
+                // TODO: make a factory, which queries the ports through a dummy instrument and creates and returns and appropriate instrument instance
+                string idn = testLocation(location); 
+                if (!string.IsNullOrEmpty(idn)) {
+                    string name = idn.Split(',')[1];
+                    listInstruments.Add(instrumentRegistry[name](location, idn));
                 }
-                catch (Exception ex) {
-                    log(ex.Message, true);
-                }
-
+                log("found " + idn + " at " + location, false);
                 prog?.Report((double)i / maxPort * 100);
+#if mock
+                if (listInstruments.Count == 3) {
+                    break;
+                }
+#endif
             }
             prog?.Report(100);
-            if (instruments.Count == 0) {
+            if (listInstruments.Count == 0) {
                 log("error: no instruments found, check connection", false);
                 return;
             }
-            log("search done, found " + instruments.Count + " device(s)", false);
+            log("search done, found " + listInstruments.Count + " device(s)", false);
         }
 
         public void prepareInstrument(string GEN, string SA) {

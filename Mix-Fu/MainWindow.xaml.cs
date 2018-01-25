@@ -37,20 +37,22 @@ namespace Mixer {
     };
 
     interface IInstrument {
-        string Location { get; set; }
-        string Name     { get; set; }
-        string FullName { get; set; }
+        string query(string question);
+        void send(string command);
     }
 
-    public class Instrument : IInstrument {
+    abstract class Instrument : IInstrument {
         public string Location { get; set; }
         public string Name { get; set; }
         public string FullName { get; set; }
 
+        public abstract string query(string question);
+        public abstract void send(string command);
+
         public override string ToString() {
             return base.ToString() + ": " + "loc: " + Location +
-                                            " _name:" + Name +
-                                            " fname:" + FullName;
+                   " _name:"       + Name +
+                   " fname:"       + FullName;
         }
     }
     
@@ -60,8 +62,6 @@ namespace Mixer {
         // TODO: switch TryParse overloads
         // TODO: autoscroll table
         // TODO: write calibration type to logs
-
-        List<IInstrument> listInstruments = new List<IInstrument>();
 
         DataTable dataTable;
         string inFile = "";
@@ -93,13 +93,13 @@ namespace Mixer {
         public MainWindow() {
             instrumentManager = new InstrumentManager(log);
 
-            DataContext = listInstruments;
+//            DataContext = listInstruments;
 
             InitializeComponent();
 
-            comboLO.ItemsSource = listInstruments;
-            comboIN.ItemsSource = listInstruments;
-            comboOUT.ItemsSource = listInstruments;
+            comboLO.ItemsSource = instrumentManager.listInstruments;
+            comboIN.ItemsSource = instrumentManager.listInstruments;
+            comboOUT.ItemsSource = instrumentManager.listInstruments;
 
             progressHandler = new Progress<double>();
             progressHandler.ProgressChanged += (sender, value) => { pbTaskStatus.Value = value; };
@@ -113,13 +113,13 @@ namespace Mixer {
             //            listInstruments.Add(new Instrument { Location = "GPIB0::18::INSTR", Name = "OUT", FullName = "GPIB0::18::INSTR" });
             //            listInstruments.Add(new Instrument { Location = "GPIB0::1::INSTR", Name = "LO", FullName = "GPIB0::1:INSTR" });
 #if mock
-            listInstruments.Add(new Instrument { Location = "IN_location", Name = "IN", FullName = "IN at IN_location" });
-            listInstruments.Add(new Instrument { Location = "OUT_location", Name = "OUT", FullName = "OUT at OUT_location" });
-            listInstruments.Add(new Instrument { Location = "LO_location", Name = "LO", FullName = "LO at LO_location" });
-
-            comboIN.SelectedIndex = 2;
-            comboOUT.SelectedIndex = 1;
-            comboLO.SelectedIndex = 0;
+//            listInstruments.Add(new Instrument { Location = "IN_location", Name = "IN", FullName = "IN at IN_location" });
+//            listInstruments.Add(new Instrument { Location = "OUT_location", Name = "OUT", FullName = "OUT at OUT_location" });
+//            listInstruments.Add(new Instrument { Location = "LO_location", Name = "LO", FullName = "LO at LO_location" });
+//
+//            comboIN.SelectedIndex = 2;
+//            comboOUT.SelectedIndex = 1;
+//            comboLO.SelectedIndex = 0;
 #endif
 
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
@@ -228,12 +228,12 @@ namespace Mixer {
             searchTokenSource = new CancellationTokenSource();
             CancellationToken token = searchTokenSource.Token;
 
-            listInstruments.Clear();
+            instrumentManager.listInstruments.Clear();
 
             try {
                 var progress = progressHandler as IProgress<double>;
                 searchTask = Task.Run(
-                    () => instrumentManager.searchInstruments(progress, listInstruments, maxPort, gpib, token), token);
+                    () => instrumentManager.searchInstruments(progress, maxPort, gpib, token), token);
                 await searchTask;
             }
             catch (Exception ex) {
