@@ -19,6 +19,7 @@ using System.Diagnostics;
 using System.Media;
 using System.Security.RightsManagement;
 using System.Text;
+using NationalInstruments.VisaNS;
 
 namespace Mixer {
 
@@ -249,6 +250,18 @@ namespace Mixer {
                 btnStopSearch.Visibility = Visibility.Hidden;
                 btnSearch.Visibility = Visibility.Visible;
             }
+            try {
+                string loc = "USB0::0x4348::0x5537::NI-VISA-10001::RAW";
+//                var sess = new UsbSession(loc);
+//                sess.Write("Source1:Apply:Sin 30kHz\n");
+                var mbSess = (MessageBasedSession) ResourceManager.GetLocalManager().Open(loc);
+                mbSess.Write("Source1:Apply:Sin 30kHz\n");
+                mbSess.Write("System:Local\n");
+            }
+            catch (Exception ex) {
+                log("error: " + ex.Message, false);
+            }
+
         }
 
         private void btnStopSearchClicked(object sender, RoutedEventArgs e) {
