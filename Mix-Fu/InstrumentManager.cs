@@ -41,9 +41,9 @@ namespace Mixer {
         public Dictionary<MeasureMode, ParameterStruct> inParameters;
         public ParameterStruct loParameters;
 
-        public Instrument m_IN { get; set; }
-        public Instrument m_OUT { get; set; }
-        public Instrument m_LO { get; set; }
+        public IInstrument m_IN { get; set; }
+        public IInstrument m_OUT { get; set; }
+        public IInstrument m_LO { get; set; }
 
         public int delay { get; set; } = 300;
         public decimal attenuation { get; set; } = 30;
@@ -319,7 +319,7 @@ namespace Mixer {
         }
 
         public void calibrateLo(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
-            Instrument tmpIn = m_IN;
+            var tmpIn = m_IN;
             m_IN = m_LO;
             calibrateIn(prog, data, paramDict, token);
             m_IN = tmpIn;

@@ -38,6 +38,9 @@ namespace Mixer {
     };
 
     interface IInstrument {
+        string Location { get; set; }
+        string Name     { get; set; }
+        string FullName { get; set; }
         string query(string question);
         void send(string command);
     }
@@ -109,19 +112,6 @@ namespace Mixer {
                 sndAlert = new SoundPlayer(alert_filename);
                 sndAlert.LoadAsync();
             }
-
-            //            listInstruments.Add(new Instrument { Location = "GPIB0::20::INSTR", Name = "IN", FullName = "GPIB0::20::INSTR" });
-            //            listInstruments.Add(new Instrument { Location = "GPIB0::18::INSTR", Name = "OUT", FullName = "GPIB0::18::INSTR" });
-            //            listInstruments.Add(new Instrument { Location = "GPIB0::1::INSTR", Name = "LO", FullName = "GPIB0::1:INSTR" });
-#if mock
-//            listInstruments.Add(new Instrument { Location = "IN_location", Name = "IN", FullName = "IN at IN_location" });
-//            listInstruments.Add(new Instrument { Location = "OUT_location", Name = "OUT", FullName = "OUT at OUT_location" });
-//            listInstruments.Add(new Instrument { Location = "LO_location", Name = "LO", FullName = "LO at LO_location" });
-//
-//            comboIN.SelectedIndex = 2;
-//            comboOUT.SelectedIndex = 1;
-//            comboLO.SelectedIndex = 0;
-#endif
 
             CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
 
@@ -195,21 +185,21 @@ namespace Mixer {
 
         // comboboxes
         private void comboIN_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager.m_IN = (Instrument)((ComboBox)sender).SelectedItem;
+            instrumentManager.m_IN = (IInstrument)((ComboBox)sender).SelectedItem;
             if (instrumentManager.m_IN != null) {
                 log(instrumentManager.m_IN.ToString(), true);
             }
         }
 
         private void comboOUT_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager.m_OUT = (Instrument)((ComboBox)sender).SelectedItem;
+            instrumentManager.m_OUT = (IInstrument)((ComboBox)sender).SelectedItem;
             if (instrumentManager.m_IN != null) {
                 log(instrumentManager.m_OUT.ToString(), true);
             }
         }
 
         private void comboLO_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager.m_LO = (Instrument)((ComboBox)sender).SelectedItem;
+            instrumentManager.m_LO = (IInstrument)((ComboBox)sender).SelectedItem;
             if (instrumentManager.m_IN != null) {
                 log(instrumentManager.m_LO.ToString(), true);
             }
@@ -250,17 +240,17 @@ namespace Mixer {
                 btnStopSearch.Visibility = Visibility.Hidden;
                 btnSearch.Visibility = Visibility.Visible;
             }
-            try {
-                string loc = "USB0::0x4348::0x5537::NI-VISA-10001::RAW";
-//                var sess = new UsbSession(loc);
-//                sess.Write("Source1:Apply:Sin 30kHz\n");
-                var mbSess = (MessageBasedSession) ResourceManager.GetLocalManager().Open(loc);
-                mbSess.Write("Source1:Apply:Sin 30kHz\n");
-                mbSess.Write("System:Local\n");
-            }
-            catch (Exception ex) {
-                log("error: " + ex.Message, false);
-            }
+//            try {
+//                string loc = "USB0::0x4348::0x5537::NI-VISA-10001::RAW";
+////                var sess = new UsbSession(loc);
+////                sess.Write("Source1:Apply:Sin 30kHz\n");
+//                var mbSess = (MessageBasedSession) ResourceManager.GetLocalManager().Open(loc);
+//                mbSess.Write("Source1:Apply:Sin 30kHz\n");
+//                mbSess.Write("System:Local\n");
+//            }
+//            catch (Exception ex) {
+//                log("error: " + ex.Message, false);
+//            }
 
         }
 

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Agilent.CommandExpert.InstrumentAbstraction.Scpi;
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
 namespace Mixer
