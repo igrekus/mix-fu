@@ -1,5 +1,3 @@
-#define mock
-
 using System;
 using System.CodeDom;
 using System.IO;
@@ -223,7 +221,7 @@ namespace Mixer {
 
         // search buttons
         private async void btnSearchClicked(object sender, RoutedEventArgs e) {
-            if (searchTask != null && !searchTask.IsCompleted) {
+            if (!searchTask?.IsCompleted == true) {
                 MessageBox.Show("Instrument search is already running.");
                 return;
             }
@@ -269,17 +267,23 @@ namespace Mixer {
         }
 
         private void btnStopSearchClicked(object sender, RoutedEventArgs e) {
-            if (searchTask != null && !searchTask.IsCompleted) {
+            if (!searchTask?.IsCompleted == true) {
                 searchTokenSource.Cancel();
             }
         }
 
-        // manual command buttons
-        private void btnRunQueryClicked(object sender, RoutedEventArgs e) {
+        // manual instrument controle buttons
+        private bool canRunCommand() {
             if (comboOUT.SelectedIndex == -1) {
                 MessageBox.Show("Error: no OUT instrument set");
-                return;
+                return false;
             }
+            return true;
+        }
+
+        private void btnRunQueryClicked(object sender, RoutedEventArgs e) {
+            if (!canRunCommand())
+                return;
             string question = textBox_query.Text;
             log(">>> query: " + question);
             var result = instrumentManager.m_OUT.query(question);
@@ -287,20 +291,12 @@ namespace Mixer {
         }
 
         private void btnRunCommandClicked(object sender, RoutedEventArgs e) {
-            if (comboOUT.SelectedIndex == -1) {
-                MessageBox.Show("Error: no OUT instrument set");
+            if (!canRunCommand())
                 return;
-            }
-
             string command = textBox_query.Text;
-            log(">>> c: " + command);
-            try {
-                instrumentManager.send(instrumentManager.m_OUT.Location, command);
-            }
-            catch (Exception ex) {
-                MessageBox.Show(ex.Message);
-                log("error: " + ex.Message);
-            }
+            log(">>> command: " + command);
+            var result = instrumentManager.m_OUT.send(command);
+            log("> " + result);
         }
 
         // data buttons
@@ -386,11 +382,6 @@ namespace Mixer {
                 MessageBox.Show("Error: check log");
                 return;
             }
-            if (mode == MeasureMode.modeMultiplier) {
-                MessageBox.Show("Error: check log");
-                log("error: multiplier doesn't need LO");
-                return;
-            }
             var progress = progressHandler as IProgress<double>;
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
@@ -398,7 +389,7 @@ namespace Mixer {
         }
 
         private void btnCancelCalibrationClicked(object sender, RoutedEventArgs e) {
-            if (calibrationTask != null && !calibrationTask.IsCompleted) {
+            if (!calibrationTask?.IsCompleted == true) {
                 calibrationTokenSource.Cancel();
             }
         }
@@ -413,12 +404,12 @@ namespace Mixer {
                 measure();
             }
             catch (Exception ex) {
-                log(ex.Message, false);
+                log("error: " + ex.Message);
             }
         }
 
         private void btnCancelMeasureClicked(object sender, RoutedEventArgs e) {
-            if (measureTask != null && !measureTask.IsCompleted) {
+            if (!measureTask?.IsCompleted == true) {
                 measureTokenSource.Cancel();
             }
         }
@@ -509,7 +500,7 @@ namespace Mixer {
                 log("error: OUT instrument must be an Analyzer");
                 return false;
             }
-            if (calibrationTask != null && !calibrationTask.IsCompleted) {
+            if (!calibrationTask?.IsCompleted == true) {
                 log("error: calibration is already running");
                 return false;
             }
@@ -537,8 +528,12 @@ namespace Mixer {
                 log("error: OUT instrument must be an Analyzer");
                 return false;
             }
-            if (calibrationTask != null && !calibrationTask.IsCompleted) {
+            if (!calibrationTask?.IsCompleted == true) {
                 log("error: calibration is already running");
+                return false;
+            }
+            if (mode == MeasureMode.modeMultiplier) {
+                log("error: multiplier doesn't need LO");
                 return false;
             }
             return true;
@@ -552,8 +547,9 @@ namespace Mixer {
             log("start calibrate: " + mode);
             var stopwatch = Stopwatch.StartNew();
 
-            dataTable = ((DataView) dataGrid.ItemsSource).ToTable();
+            dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
+            // TODO: handle exceptions inside the task, safe call here?
             try {
                 calibrationTask = Task.Run(func, token);
                 dataGrid.ItemsSource = dataTable.AsDataView();
@@ -607,7 +603,7 @@ namespace Mixer {
                 log("error: LO instrument must be a Generator");
                 return false;
             }
-            if (measureTask != null && !measureTask.IsCompleted) {
+            if (!measureTask?.IsCompleted == true) {
                 log("error: measure is already running");
                 return false;
             }

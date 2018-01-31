@@ -30,7 +30,7 @@ namespace Mixer
 
         public override QueryResult query(string question) {
 #if mock
-            return new QueryResult { code = 0, answer = "gen query success" };
+            return new QueryResult { code = 0, answer = "generator query success" };
 #else
             string ans;
             try {
@@ -43,9 +43,19 @@ namespace Mixer
 #endif
         }
 
-
         public override CommandResult send(string command) {
-            throw new NotImplementedException();
+#if mock
+            return new CommandResult { code = 0, message = "generator command success" };
+#else
+            try {
+                _instrument.Transport.Command.Invoke(command);
+                return new CommandResult { code = 0, message = "generator command success" };
+            }
+            catch (Exception ex) {
+                return new CommandResult { code = -1, message = ex.Message };
+            }
+#endif
         }
     }
 }
+
