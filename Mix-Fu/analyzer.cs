@@ -1,4 +1,5 @@
-﻿using System;
+﻿#define mock
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -27,11 +28,22 @@ namespace Mixer
             throw new NotImplementedException();
         }
 
-        public override string query(string question) {
-            throw new NotImplementedException();
+        public override QueryResult query(string question) {
+#if mock
+            return new QueryResult {code = 0, answer = "analyser query success"};
+#else
+            string ans;
+            try {
+                _instrument.Transport.Query.Invoke(question, out ans);
+                return new QueryResult { code = 0, answer = ans };
+            }
+            catch (Exception ex) {
+                return new QueryResult { code = -1, answer = ex.Message };
+            }
+#endif
         }
 
-        public override void send(string command) {
+        public override CommandResult send(string command) {
             throw new NotImplementedException();
         }
     }

@@ -37,12 +37,28 @@ namespace Mixer {
         modeMultiplier
     };
 
+    public struct QueryResult {
+        public int code;
+        public string answer;
+        public override string ToString() {
+            return "QueryResult(" + code + ", " + answer + ")";
+        }
+    }
+
+    public struct CommandResult {
+        public int code;
+        public string message;
+        public override string ToString() {
+            return "CommandResult(" + code + ", " + message + ")";
+        }
+    }
+
     interface IInstrument {
         string Location { get; set; }
         string Name     { get; set; }
         string FullName { get; set; }
-        string query(string question);
-        void send(string command);
+        QueryResult query(string question);
+        CommandResult send(string command);
     }
 
     abstract class Instrument : IInstrument {
@@ -50,8 +66,8 @@ namespace Mixer {
         public string Name { get; set; }
         public string FullName { get; set; }
 
-        public abstract string query(string question);
-        public abstract void send(string command);
+        public abstract QueryResult query(string question);
+        public abstract CommandResult send(string command);
 
         public override string ToString() {
             return base.ToString() + ": " + "loc: " + Location +
@@ -221,6 +237,7 @@ namespace Mixer {
 
             instrumentManager.listInstruments.Clear();
 
+            // TODO: rewrite 
             try {
                 var progress = progressHandler as IProgress<double>;
                 searchTask = Task.Run(
@@ -231,8 +248,6 @@ namespace Mixer {
                 log("error: " + ex.Message);
             }
             finally {
-//                searchTask?.Dispose();
-
                 comboIN.Items.Refresh();
                 comboOUT.Items.Refresh();
                 comboLO.Items.Refresh();
@@ -242,11 +257,10 @@ namespace Mixer {
             }
 //            try {
 //                string loc = "USB0::0x4348::0x5537::NI-VISA-10001::RAW";
-////                var sess = new UsbSession(loc);
-////                sess.Write("Source1:Apply:Sin 30kHz\n");
-//                var mbSess = (MessageBasedSession) ResourceManager.GetLocalManager().Open(loc);
-//                mbSess.Write("Source1:Apply:Sin 30kHz\n");
-//                mbSess.Write("System:Local\n");
+//                var usbRaw = (UsbRaw)ResourceManager.GetLocalManager().Open(loc);
+//                usbRaw.Write("Source1:Apply:Sin 10kHz\n");
+//                log(usbRaw.Query("Source1:Apply?"));
+//                usbRaw.Write("System:Local\n");
 //            }
 //            catch (Exception ex) {
 //                log("error: " + ex.Message, false);
@@ -266,20 +280,10 @@ namespace Mixer {
                 MessageBox.Show("Error: no OUT instrument set");
                 return;
             }
-
-            // TODO: move query syntax into InstrumentManager class
             string question = textBox_query.Text;
-            string answer = "";
             log(">>> query: " + question);
-            try {
-                answer = instrumentManager.query(instrumentManager.m_OUT.Location, question);
-            }
-            catch (Exception ex) {
-                MessageBox.Show("Error: " + ex.Message);
-                log("error: " + ex.Message);
-                answer = "error querying instrument";
-            }
-            log("> " + answer);
+            var result = instrumentManager.m_OUT.query(question);
+            log("> " + result);
         }
 
         private void btnRunCommandClicked(object sender, RoutedEventArgs e) {
@@ -322,7 +326,6 @@ namespace Mixer {
         }
 
         private void btnSaveXlsxClicked(object sender, RoutedEventArgs e) {
-            // TODO: allow overwrite existing files
             var saveFileDialog = new Microsoft.Win32.SaveFileDialog {
                 Filter = "Таблица (*.xlsx)|*.xlsx|Все файлы (*.*)|*.*"
             };
@@ -344,12 +347,6 @@ namespace Mixer {
                     if (!decimal.TryParse(cellStr, out dummy)) {
                         cell.Style.Font.Bold = true;
                     }
-//                    try {
-//                        cell.Value = Convert.ToDecimal(cell.Value);
-//                    }
-//                    catch {
-//                        cell.Style.Font.Bold = true;
-//                    }
                 }
                 package.Save();
             }
@@ -380,7 +377,7 @@ namespace Mixer {
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
             calibrate(
-                () => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode],
+                () => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode], 
                     mode, token), token);
         }
 
@@ -404,7 +401,6 @@ namespace Mixer {
             if (calibrationTask != null && !calibrationTask.IsCompleted) {
                 calibrationTokenSource.Cancel();
             }
-//            log("cancel calibrate", false);
         }
 
         // measure buttons
@@ -414,7 +410,6 @@ namespace Mixer {
                     MessageBox.Show("Error: check log");
                     return;
                 }
-
                 measure();
             }
             catch (Exception ex) {
@@ -506,6 +501,14 @@ namespace Mixer {
                 log("error: no OUT instrument selected");
                 return false;
             }
+            if (comboIN.SelectedItem.GetType() != typeof(Generator)) {
+                log("error: IN instrument must be a Generator");
+                return false;
+            }
+            if (comboOUT.SelectedItem.GetType() != typeof(Analyzer)) {
+                log("error: OUT instrument must be an Analyzer");
+                return false;
+            }
             if (calibrationTask != null && !calibrationTask.IsCompleted) {
                 log("error: calibration is already running");
                 return false;
@@ -526,7 +529,15 @@ namespace Mixer {
                 log("error: no OUT instrument selected");
                 return false;
             }
-            if ((calibrationTask != null) && (!calibrationTask.IsCompleted)) {
+            if (comboLO.SelectedItem.GetType() != typeof(Generator)) {
+                log("error: LO instrument must be a Generator");
+                return false;
+            }
+            if (comboOUT.SelectedItem.GetType() != typeof(Analyzer)) {
+                log("error: OUT instrument must be an Analyzer");
+                return false;
+            }
+            if (calibrationTask != null && !calibrationTask.IsCompleted) {
                 log("error: calibration is already running");
                 return false;
             }
@@ -584,6 +595,18 @@ namespace Mixer {
                 log("error: no LO instrument selected");
                 return false;
             }
+            if (comboIN.SelectedItem.GetType() != typeof(Generator)) {
+                log("error: IN instrument must be a Generator");
+                return false;
+            }
+            if (comboOUT.SelectedItem.GetType() != typeof(Analyzer)) {
+                log("error: OUT instrument must be an Analyzer");
+                return false;
+            }
+            if (comboLO.SelectedItem.GetType() != typeof(Generator)) {
+                log("error: LO instrument must be a Generator");
+                return false;
+            }
             if (measureTask != null && !measureTask.IsCompleted) {
                 log("error: measure is already running");
                 return false;
@@ -614,10 +637,12 @@ namespace Mixer {
                             instrumentManager.measure_mix_DSB_up(progress, dataTable, token), token);
                         break;
                     case MeasureMode.modeSSBDown:
-                        measureTask = Task.Run(() => instrumentManager.measure_mix_SSB_down(progress, dataTable, token), token);
+                        measureTask = Task.Run(() => instrumentManager.measure_mix_SSB_down(progress, dataTable, token),
+                            token);
                         break;
                     case MeasureMode.modeSSBUp:
-                        measureTask = Task.Run(() => instrumentManager.measure_mix_SSB_up(progress, dataTable, token), token);
+                        measureTask = Task.Run(() => instrumentManager.measure_mix_SSB_up(progress, dataTable, token),
+                            token);
                         break;
                     case MeasureMode.modeMultiplier:
                         measureTask = Task.Run(() => instrumentManager.measure_mult(progress, dataTable, token), token);
