@@ -18,7 +18,10 @@ namespace Mixer {
     }
 
     class InstrumentManager {
-        // instrument class dict
+
+#region regDataMembers
+
+        // instrument class registry
         private Dictionary<string, Func<string, string, Instrument>> instrumentRegistry =
             new Dictionary<string, Func<string, string, Instrument>> {
                                                                          {
@@ -52,24 +55,22 @@ namespace Mixer {
 
         private Action<string, bool> log;   // TODO: make logger class
 
+#endregion regDataMembers
+
         public InstrumentManager(Action<string, bool> logger) {
             log = logger;
             initParameterLists();
         }
 
         private void initParameterLists() {
+
             // IN calibration parameters
             inParameters = new Dictionary<MeasureMode, ParameterStruct> {
-                {MeasureMode.modeDSBDown,
-                 new ParameterStruct {colFreq = "FRF", colPow = "PRF", colPowGoal = "PRF-GOAL"}},
-                {MeasureMode.modeDSBUp,
-                 new ParameterStruct {colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL"}},
-                {MeasureMode.modeSSBDown,
-                 new ParameterStruct {colFreq = "FUSB", colPow = "PUSB", colPowGoal = "PUSB-GOAL"}},
-                {MeasureMode.modeSSBUp,
-                 new ParameterStruct {colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL"}},
-                {MeasureMode.modeMultiplier,
-                 new ParameterStruct {colFreq = "FH1", colPow = "PIN", colPowGoal = "PIN-GOAL"}}
+                { MeasureMode.modeDSBDown,    new ParameterStruct { colFreq = "FRF", colPow = "PRF", colPowGoal = "PRF-GOAL" } },
+                { MeasureMode.modeDSBUp,      new ParameterStruct { colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL" } },
+                { MeasureMode.modeSSBDown,    new ParameterStruct { colFreq = "FUSB", colPow = "PUSB", colPowGoal = "PUSB-GOAL" } },
+                { MeasureMode.modeSSBUp,      new ParameterStruct { colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL" } },
+                { MeasureMode.modeMultiplier, new ParameterStruct { colFreq = "FH1", colPow = "PIN", colPowGoal = "PIN-GOAL" } }
             };
 
             // LO calibration parameters
@@ -140,7 +141,7 @@ namespace Mixer {
 #endif
         private string testLocation(string location) {
 #if mock
-            var          rnd = new Random();
+            var rnd = new Random();
             var lst = new List<string> {
                                            "Agilent Technoligies,N9030A,MY49432146,A.11.04",
                                            "AAAA,GEN,1111",
@@ -173,7 +174,7 @@ namespace Mixer {
                 log("trying " + location, false);
 
                 // TODO: query dummy instrument
-                // TODO: make a factory, which queries the ports through a dummy instrument and creates and returns and appropriate instrument instance
+                // TODO: make a factory, which queries the ports through a dummy instrument and creates and returns and appropriate instrument instance?
                 string idn = testLocation(location); 
                 if (!string.IsNullOrEmpty(idn)) {
                     string name = idn.Split(',')[1];
@@ -222,6 +223,8 @@ namespace Mixer {
             log("release instrument", false);
         }
 
+#region regCalibrations
+        // calibrations
         public void calibrateIn(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
             // TODO: exception handling
             // TODO: split into methods
@@ -413,6 +416,10 @@ namespace Mixer {
             prog?.Report(100);
         }
 
+        #endregion regCalibrations
+
+        #region regMeasurement
+        // measure 
         public void measurePower(DataRow row, string SA, decimal powGoal, decimal freq, string colAtt, string colPow, string colConv, int coeff, int corr) {
             string attStr = row[colAtt].ToString().Replace(',', '.');
             if (string.IsNullOrEmpty(attStr) || attStr == "-") {
@@ -816,5 +823,7 @@ namespace Mixer {
             releaseInstrument(IN, OUT);
             prog?.Report(100);
         }
+
+#endregion regMeasurement
     }
 }

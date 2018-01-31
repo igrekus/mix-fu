@@ -44,7 +44,17 @@ namespace Mixer
         }
 
         public override CommandResult send(string command) {
-            throw new NotImplementedException();
+#if mock
+            return new CommandResult {code = 0, message = "analyser command success"};
+#else
+            try {
+                _instrument.Transport.Command.Invoke(command);
+                return new CommandResult { code = 0, message = "analyzer command success" };
+            }
+            catch (Exception ex) {
+                return new CommandResult { code = -1, message = ex.Message };
+            }
+#endif
         }
     }
 }
