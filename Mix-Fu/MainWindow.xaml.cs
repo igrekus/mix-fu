@@ -35,28 +35,12 @@ namespace Mixer {
         modeMultiplier
     };
 
-    public struct QueryResult {
-        public int code;
-        public string answer;
-        public override string ToString() {
-            return "QueryResult(" + code + ", " + answer + ")";
-        }
-    }
-
-    public struct CommandResult {
-        public int code;
-        public string message;
-        public override string ToString() {
-            return "CommandResult(" + code + ", " + message + ")";
-        }
-    }
-
     interface IInstrument {
         string Location { get; set; }
         string Name     { get; set; }
         string FullName { get; set; }
-        QueryResult query(string question);
-        CommandResult send(string command);
+        string query(string question);
+        string send(string command);
     }
 
     abstract class Instrument : IInstrument {
@@ -64,8 +48,8 @@ namespace Mixer {
         public string Name { get; set; }
         public string FullName { get; set; }
 
-        public abstract QueryResult query(string question);
-        public abstract CommandResult send(string command);
+        public abstract string query(string question);
+        public abstract string send(string command);
 
         public override string ToString() {
             return base.ToString() + ": " + "loc: " + Location +
@@ -230,29 +214,22 @@ namespace Mixer {
 
             int maxPort = Convert.ToInt32(textBox_number_maxport.Text);
             int gpib = Convert.ToInt32(textBox_number_GPIB.Text);
+
             searchTokenSource = new CancellationTokenSource();
             CancellationToken token = searchTokenSource.Token;
 
             instrumentManager.listInstruments.Clear();
 
-            // TODO: rewrite 
-            try {
-                var progress = progressHandler as IProgress<double>;
-                searchTask = Task.Run(
-                    () => instrumentManager.searchInstruments(progress, maxPort, gpib, token), token);
-                await searchTask;
-            }
-            catch (Exception ex) {
-                log("error: " + ex.Message);
-            }
-            finally {
-                comboIN.Items.Refresh();
-                comboOUT.Items.Refresh();
-                comboLO.Items.Refresh();
+            var progress = progressHandler as IProgress<double>;
+            searchTask = Task.Run(() => instrumentManager.searchInstruments(progress, maxPort, gpib, token), token);
+            await searchTask;
 
-                btnStopSearch.Visibility = Visibility.Hidden;
-                btnSearch.Visibility = Visibility.Visible;
-            }
+            comboIN.Items.Refresh();
+            comboOUT.Items.Refresh();
+            comboLO.Items.Refresh();
+
+            btnStopSearch.Visibility = Visibility.Hidden;
+            btnSearch.Visibility = Visibility.Visible;
 //            try {
 //                string loc = "USB0::0x4348::0x5537::NI-VISA-10001::RAW";
 //                var usbRaw = (UsbRaw)ResourceManager.GetLocalManager().Open(loc);
@@ -358,9 +335,22 @@ namespace Mixer {
             var progress = progressHandler as IProgress<double>;
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
-            calibrate(
-                () => instrumentManager.calibrateIn(progress, dataTable, instrumentManager.inParameters[mode], token),
-                token);
+            log("start calibrate: " + mode + ", IN");
+            calibrate(() => instrumentManager.calibrateIn(progress, dataTable, instrumentManager.inParameters[mode], token), token);
+        }
+
+        private void btnCalibrateLoClicked(object sender, RoutedEventArgs e) {
+            if (!canCalibrateLO()) {
+                MessageBox.Show("Error: check log");
+                return;
+            }
+
+            var progress            = progressHandler as IProgress<double>;
+            calibrationTokenSource  = new CancellationTokenSource();
+            CancellationToken token = calibrationTokenSource.Token;
+            log("start calibrate: " + mode + ", LO");
+            calibrate(() => instrumentManager.calibrateLo(progress, dataTable, instrumentManager.loParameters, token),
+                      token);
         }
 
         private void btnCalibrateOutClicked(object sender, RoutedEventArgs e) {
@@ -372,20 +362,9 @@ namespace Mixer {
             var progress = progressHandler as IProgress<double>;
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
-            calibrate(
-                () => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode], 
-                    mode, token), token);
-        }
-
-        private void btnCalibrateLoClicked(object sender, RoutedEventArgs e) {
-            if (!canCalibrateLO()) {
-                MessageBox.Show("Error: check log");
-                return;
-            }
-            var progress = progressHandler as IProgress<double>;
-            calibrationTokenSource = new CancellationTokenSource();
-            CancellationToken token = calibrationTokenSource.Token;
-            calibrate(() => instrumentManager.calibrateLo(progress, dataTable, instrumentManager.loParameters, token), token);
+            log("start calibrate: " + mode + ", OUT");
+            calibrate(() => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode],
+                                                           mode, token), token);
         }
 
         private void btnCancelCalibrationClicked(object sender, RoutedEventArgs e) {
@@ -396,6 +375,7 @@ namespace Mixer {
 
         // measure buttons
         private void btnMeasureClicked(object sender, RoutedEventArgs e) {
+            // TODO: fix this try-catch
             try {
                 if (!canMeasure()) {
                     MessageBox.Show("Error: check log");
@@ -544,30 +524,24 @@ namespace Mixer {
             btnCalibrateIn.Visibility = Visibility.Hidden;
             btnCalibrateOut.Visibility = Visibility.Hidden;
             btnCalibrateLo.Visibility = Visibility.Hidden;
-            log("start calibrate: " + mode);
+
             var stopwatch = Stopwatch.StartNew();
 
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
-            // TODO: handle exceptions inside the task, safe call here?
-            try {
-                calibrationTask = Task.Run(func, token);
-                dataGrid.ItemsSource = dataTable.AsDataView();
-                await calibrationTask;
-            }
-            catch (Exception ex) {
-                log("error: " + ex.Message);
-            }
-            finally {
-                stopwatch.Stop();
-                log("end calibrate, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
-                sndAlert?.Play();
-                MessageBox.Show("Done.");
-                btnCancelCalibration.Visibility = Visibility.Hidden;
-                btnCalibrateIn.Visibility = Visibility.Visible;
-                btnCalibrateOut.Visibility = Visibility.Visible;
-                btnCalibrateLo.Visibility = Visibility.Visible;
-            }
+            calibrationTask = Task.Run(func, token);
+            dataGrid.ItemsSource = dataTable.AsDataView();
+            await calibrationTask;
+
+            btnCancelCalibration.Visibility = Visibility.Hidden;
+            btnCalibrateIn.Visibility       = Visibility.Visible;
+            btnCalibrateOut.Visibility      = Visibility.Visible;
+            btnCalibrateLo.Visibility       = Visibility.Visible;
+
+            stopwatch.Stop();
+            log("end calibrate, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec");
+            sndAlert?.Play();
+            MessageBox.Show("Done.");
         }
 
 #endregion regCalibrationManager
@@ -656,9 +630,9 @@ namespace Mixer {
                 stopwatch.Stop();
                 log("end measure, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
                 sndAlert?.Play();
-                MessageBox.Show("Task complete.");
                 btnMeasure.Visibility = Visibility.Visible;
                 btnCancelMeasure.Visibility = Visibility.Hidden;
+                MessageBox.Show("Task complete.");
             }
         }
 

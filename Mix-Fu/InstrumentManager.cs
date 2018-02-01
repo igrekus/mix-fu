@@ -8,6 +8,9 @@ using System.Globalization;
 using System.Resources;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Xml.Serialization;
+using Agilent.CommandExpert.ScpiNet.Ag90x0_SA_A_08_03.SCPI.CONFigure.SANalyzer;
+using OfficeOpenXml.FormulaParsing.Logging;
 
 namespace Mixer {
 
@@ -139,6 +142,8 @@ namespace Mixer {
             return answer;
         }
 #endif
+
+#region regInstrumentControl
         private string testLocation(string location) {
 #if mock
             var rnd = new Random();
@@ -164,12 +169,12 @@ namespace Mixer {
         
         public void searchInstruments(IProgress<double> prog, int maxPort, int gpib, CancellationToken token) {
             log("start instrument search...", false);
-
             for (int i = 0; i <= maxPort; i++) {
                 if (token.IsCancellationRequested) {
-                    token.ThrowIfCancellationRequested();
+                    log("error: task aborted", false);
                     return;
                 }
+
                 string location = "GPIB" + gpib + "::" + i + "::INSTR";
                 log("trying " + location, false);
 
@@ -196,42 +201,176 @@ namespace Mixer {
             log("search done, found " + listInstruments.Count + " device(s)", false);
         }
 
-        public void prepareInstrument(string GEN, string SA) {
-            // TODO: check SA & GEN assignment logic
-            send(SA, ":CAL:AUTO OFF");                       // выключаем автокалибровку анализатора спектра
-            send(SA, ":SENS:FREQ:SPAN " + span);             // выставляем спан
-            send(SA, ":CALC:MARK1:MODE POS");                // выставляем режим маркера
-            send(SA, ":POW:ATT " + attenuation);             // выставляем аттенюацию
-            send(GEN, "OUTP:STAT ON");                       // включаем генератор
-            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString())
-            // TODO: send GEN modulation off
-            log("capture instrument", false);
+        private bool instPrepareForCalib(Generator GEN, Analyzer SA) {
+            try {
+                SA.SetAutocalibration(Analyzer.AutocalState.AutocalOff);
+                SA.SetFreqSpan(span);
+                SA.SetMarkerMode(Analyzer.MarkerMode.ModePos);
+                SA.SetPowerAttenuation(attenuation);
+                //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString()) // TODO: add this line
+
+                GEN.SetOutputModulation(Generator.OutputModulationState.ModulationOff);
+                GEN.SetOutput(Generator.OutputState.OutputOn);                
+            }
+            catch (Exception ex) {
+                log("error: can't prepare instruments: " + ex.Message, false);
+                instReleaseFromCalib(GEN, SA);
+                return false;
+            }
+            log("prepare instruments", false);
+            return true;
         }
 
-        private void setCalibrationFreq(string GEN, string SA, decimal inFreqDec) {
-            // TODO: bind to instrument properties
-            // exceptions handled in the calling method
-            send(GEN, "SOUR:FREQ " + inFreqDec);
-            send(SA, ":SENSe:FREQuency:RF:CENTer " + inFreqDec);
-            send(SA, ":CALCulate:MARKer1:X:CENTer " + inFreqDec);
+        private bool instPrepareForMeas(Generator GEN, Analyzer SA, Generator LO) {
+            if (!instPrepareForCalib(GEN, SA)) 
+                return false;
+            
+            try {
+                LO.SetOutputModulation(Generator.OutputModulationState.ModulationOff);
+                LO.SetOutput(Generator.OutputState.OutputOn);
+            }
+            catch (Exception ex) {
+                log("error: fail turning LO generator on" + ex.Message, false);
+                return false;
+            }
+
+            return true;
         }
 
-        public void releaseInstrument(string GEN, string SA) {
-            // TODO: check SA & GEN assignment logic
-            send(SA, ":CAL:AUTO ON");     //включаем автокалибровку анализатора спектра
-            send(GEN, "OUTP:STAT OFF");   //выключаем генератор
-            log("release instrument", false);
+        private bool instReleaseGen(Generator GEN) {
+            try {
+                GEN.SetOutput(Generator.OutputState.OutputOff);
+            }
+            catch (Exception ex) {
+                log("error: can't release generator: " + ex.Message, false);
+                return false;
+            }
+
+            return true;
         }
+
+        private bool instReleaseAnalyzer(Analyzer SA) {
+            try {
+                SA.SetAutocalibration(Analyzer.AutocalState.AutocalOn);
+            }
+            catch (Exception ex) {
+                log("error: can't release analyzer: " + ex.Message, false);
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool instReleaseFromCalib(Generator GEN, Analyzer SA) {
+            if (!instReleaseGen(GEN))
+                return false;
+            if (!instReleaseAnalyzer(SA))
+                return false;
+
+            log("release instruments", false);
+            return true;
+        }
+
+        private bool instReleaseFromMeas(Generator GEN, Analyzer SA, Generator LO) {
+            if (!instReleaseGen(GEN))
+                return false;
+            if (!instReleaseAnalyzer(SA))
+                return false;
+            if (!instReleaseGen(LO))
+                return false;
+
+            log("release instruments", false);
+            return true;
+        }
+
+        private bool instSetAnalyzerCenterFreq(Analyzer SA, decimal freq) {
+            try {
+                SA.SetMeasCenterFreq(freq);
+                SA.SetMarker1XCenter(freq);
+            }
+            catch (Exception ex) {
+                log("error: fail setting calibration freq= " + freq + ", skipping (" + ex.Message + ")", false);
+                return false;
+            }
+            return true;
+        }
+
+        private bool instSetCalibFreq(Generator GEN, Analyzer SA, decimal freq) {
+            if (!instSetAnalyzerCenterFreq(SA, freq))
+                return false;
+            try {
+                GEN.SetSourceFreq(freq);
+            }
+            catch (Exception ex) {
+                log("error: fail setting calibration freq= " + freq + ", skipping (" + ex.Message + ")", false);
+                return false;
+            }
+
+            log("debug: set calibration freq=" + freq, true);
+            return true;
+        }
+
+        private bool instSetGenPowGoal(Generator GEN, decimal pow) {
+            try {
+                GEN.SetSourcePow(pow);
+            }
+            catch (Exception ex) {
+                log("error: fail setting calibration pow=" + pow + ", skipping (" + ex.Message + ")", false);
+                return false;
+            }
+
+            log("debug: set calibration pow=" + pow, true);
+            return true;
+        }
+
+        private decimal readPower(Analyzer SA) {
+            // this function should always return correct decimal number, error handling is not necessary
+            string readpow;
+            try {
+                readpow = SA.ReadMarker1Y();
+            }
+            catch (Exception ex) {
+                log("error: can't read power: " + ex.Message, false);
+                return 0;
+            }            
+            if (!decimal.TryParse(readpow, NumberStyles.Any, CultureInfo.InvariantCulture,
+                                  out var readPowDec)) {
+                log("error: can't parse read pow: " + readpow, false);
+                return 0;
+            }
+            log("debug: read data:" + readPowDec, true);
+            return readPowDec;
+        }
+
+#endregion regInstrumentControl
 
 #region regCalibrations
-        // calibrations
-        public void calibrateIn(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
-            // TODO: exception handling
-            // TODO: split into methods
-            string GEN = m_IN.Location;
-            string SA = m_OUT.Location;
 
-            prepareInstrument(GEN, SA);
+        public void calibrate(Generator GEN, Analyzer SA, IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
+
+            // local helper fuction
+            bool convertStrValues(string inFreqStr, string inPowGoalStr, out decimal inFreqDec, out decimal inPowGoalDec) {
+                bool success = true;
+
+                // TODO: extract str2dec method if used in other functions
+                if (!decimal.TryParse(inFreqStr, NumberStyles.Any, CultureInfo.InvariantCulture,
+                                      out inFreqDec)) {
+                    log("error: fail parsing " + inFreqStr + ", skipping", false);
+                    success = false;
+                }
+
+                if (!decimal.TryParse(inPowGoalStr, NumberStyles.Any, CultureInfo.InvariantCulture,
+                                      out inPowGoalDec)) {
+                    log("error: fail parsing " + inPowGoalStr + ", skipping", false);
+                    success = false;
+                }
+
+                inFreqDec *= Constants.GHz;
+                return success;
+            }
+
+            if (!instPrepareForCalib(GEN, SA))
+                return;
 
             // TODO: if performance issue, write own key class, override Equals() and GetHash()
             var cache = new Dictionary<Tuple<decimal, decimal>, Tuple<decimal, decimal>>();
@@ -239,10 +378,11 @@ namespace Mixer {
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    releaseInstrument(GEN, SA);
-                    token.ThrowIfCancellationRequested();
+                    log("error: task aborted", false);
+                    instReleaseFromCalib(GEN, SA);
                     return;
                 }
+
                 string inFreqStr = row[paramDict.colFreq].ToString().Replace(',', '.');
                 string inPowGoalStr = row[paramDict.colPowGoal].ToString().Replace(',', '.');
 
@@ -251,19 +391,8 @@ namespace Mixer {
                     continue;
                 }
 
-                decimal inFreqDec;
-                decimal inPowGoalDec;
-                if (!decimal.TryParse(inFreqStr, NumberStyles.Any, CultureInfo.InvariantCulture,
-                                      out inFreqDec)) {
-                    log("error: fail parsing " + inFreqStr + ", skipping", false);
+                if (!convertStrValues(inFreqStr, inPowGoalStr, out var inFreqDec, out var inPowGoalDec))
                     continue;
-                }
-                if (!decimal.TryParse(inPowGoalStr, NumberStyles.Any, CultureInfo.InvariantCulture,
-                                      out inPowGoalDec)) {
-                    log("error: fail parsing " + inPowGoalStr + ", skipping", false);
-                    continue;
-                }
-                inFreqDec *= Constants.GHz;
 
                 log("debug: calibrate: freq=" + inFreqDec + " pgoal=" + inPowGoalDec, true);
 
@@ -273,69 +402,52 @@ namespace Mixer {
                     decimal tempPowDec = inPowGoalDec;
                     decimal err = 1;
 
-                    try {
-                        setCalibrationFreq(GEN, SA, inFreqDec);
-                    }
-                    catch (Exception ex) {
-                        log("error: calibrate fail setting freq=" + inFreqDec + ", skipping (" + ex.Message + ")", false);
+                    if (!instSetCalibFreq(GEN, SA, inFreqDec)) {
                         continue;
                     }
 
                     int count = 0;
                     int tmpDelay = delay;
                     while (count < 5 && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
-                        // TODO: exception handling
-                        try {
-                            send(GEN, "SOUR:POW " + tempPowDec);
-                        }
-                        catch (Exception ex) {
-                            log("error: calibrate fail setting pow=" + tempPowDec + ", skipping (" + ex.Message + ")", false);
+                        if (!instSetGenPowGoal(GEN, tempPowDec))
                             break;
-                        }
-                        Thread.Sleep(delay);
-                        // TODO: inline readPow
-                        string readPow = query(SA, ":CALCulate:MARKer:Y?");
-                        decimal readPowDec = 0;
-                        decimal.TryParse(readPow, NumberStyles.Any,
-                                         CultureInfo.InvariantCulture, out readPowDec);
-                        log("read data:" + readPow + " " + readPowDec, true);
 
-                        err = inPowGoalDec - readPowDec;
-                        tempPowDec += err;
-                        
+                        Thread.Sleep(tmpDelay);
+
+                        err = inPowGoalDec - readPower(SA);   
+                        tempPowDec += err;                        
                         ++count;
-                        delay += 50;
+                        tmpDelay += 50;
                     }
-                    delay = tmpDelay;
                     cache.Add(freqPowPair, Tuple.Create(tempPowDec, err));
                 }
                 var powErrPair = cache[freqPowPair];
-                // ToString("0.00", CultureInfo.InvariantCulture).Replace('.', ',');
                 row[paramDict.colPow] = powErrPair.Item1.ToString(Constants.decimalFormat).Replace('.', ',');
                 row["ERR"] = powErrPair.Item2.ToString(Constants.decimalFormat).Replace('.', ',');
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
-            releaseInstrument(GEN, SA);
+            instReleaseFromCalib(GEN, SA);
             prog?.Report(100);
         }
 
-        public void calibrateLo(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
-            var tmpIn = m_IN;
-            m_IN = m_LO;
-            calibrateIn(prog, data, paramDict, token);
-            m_IN = tmpIn;
+        public void calibrateIn(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
+            calibrate((Generator)m_IN, (Analyzer)m_OUT, prog, data, paramDict, token);
         }
 
-        public string getAttenuationError(string GEN, string SA, string freq, decimal powGoal, int harmonic = 1) {
+        public void calibrateLo(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
+            calibrate((Generator)m_LO, (Analyzer)m_OUT, prog, data, paramDict, token);
+        }
+
+        private string getAttenuationError(Generator GEN, Analyzer SA, string freq, decimal powGoal, int harmonic = 1) {
             if (string.IsNullOrEmpty(freq) || freq == "-") {
                 return "-";
             }
 
-            decimal inFreqDec = 0;
+            // TODO: extract str2dec method, move logging there
             if (!decimal.TryParse(freq.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture,
-                                  out inFreqDec)) {
+                                  out var inFreqDec)) {
                 log("error: fail parsing " + freq.Replace(",", "."), false);
                 return "-";
             }
@@ -346,21 +458,12 @@ namespace Mixer {
                 return "-";
             }
 
-            try {
-                setCalibrationFreq(GEN, SA, inFreqDec * harmonic);
-            }
-            catch (Exception ex) {
-                log("error: calibrate fail setting freq=" + inFreqDec + " (" + ex.Message + ")", false);
+            if (!instSetCalibFreq(GEN, SA, inFreqDec * harmonic))
                 return "-";
-            }
-            
+
             Thread.Sleep(delay);
 
-            string readPow = query(SA, ":CALCulate:MARKer:Y?");
-
-            decimal readPowDec = 0;
-            decimal.TryParse(readPow, NumberStyles.Any, CultureInfo.InvariantCulture, out readPowDec);
-            decimal errDec = powGoal - readPowDec;
+            decimal errDec = powGoal - readPower(SA);
 
             if (errDec < 0)
                 errDec = 0;
@@ -370,29 +473,25 @@ namespace Mixer {
 
         public void calibrateOut(IProgress<double> prog, DataTable data, List<Tuple<string, string>> parameters, MeasureMode mode, CancellationToken token) {
             // TODO: fail whole row on any error
-            string GEN = m_IN.Location;
-            string SA = m_OUT.Location;
+            var GEN = (Generator)m_IN;
+            var SA = (Analyzer)m_OUT;
 
-            prepareInstrument(GEN, SA);
+            instPrepareForCalib(GEN, SA);
 
             const decimal tempPow = (decimal)-20.00;
-            try {
-                send(GEN, "SOUR:POW " + tempPow);
-            }
-            catch (Exception ex) {
-                log("error: calibrate fail setting pow=" + tempPow + ", aborting (" + ex.Message + ")", false);
+            if (!instSetGenPowGoal(GEN, tempPow))
                 return;
-            }
 
             var cache = new Dictionary<string, string>();
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    releaseInstrument(GEN, SA);
-                    token.ThrowIfCancellationRequested();
+                    log("error: task aborted", false);
+                    instReleaseFromCalib(GEN, SA);
                     return;
                 }
+
                 int harmonic = 1;   // hack
 
                 foreach (var p in parameters) {
@@ -404,24 +503,24 @@ namespace Mixer {
 
                     row[p.Item2] = cache[freq];
 
-                    if (mode == MeasureMode.modeMultiplier) { 
+                    if (mode == MeasureMode.modeMultiplier)
                         ++harmonic;
-                    }
                 }
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
-            releaseInstrument(GEN, SA);
+            instReleaseFromCalib(GEN, SA);
             prog?.Report(100);
         }
 
-        #endregion regCalibrations
+#endregion regCalibrations
 
-        #region regMeasurement
-        // measure 
-        public void measurePower(DataRow row, string SA, decimal powGoal, decimal freq, string colAtt, string colPow, string colConv, int coeff, int corr) {
+#region regMeasurement
+
+        public void measurePower(DataRow row, Analyzer SA, decimal powGoal, decimal freq, string colAtt, string colPow, string colConv, int coeff, int corr) {
             string attStr = row[colAtt].ToString().Replace(',', '.');
+
             if (string.IsNullOrEmpty(attStr) || attStr == "-") {
                 log("error: measure: empty row, skipping: " + colPow + ": freq=" + freq + " powgoal=" + powGoal, true);
                 row[colPow] = "-";
@@ -434,30 +533,19 @@ namespace Mixer {
                 row[colConv] = "-";
                 return;
             }
-            // TODO: move to InstrumentManager
-            try {
-                send(SA, ":SENSe:FREQuency:RF:CENTer " + freq);
-                send(SA, ":CALCulate:MARKer1:X:CENTer " + freq);
-            }
-            catch (Exception ex) {
-                log("error: measure fail setting freq: " + ex.Message, false);
-                row[colPow] = "-";
+
+            if (!instSetAnalyzerCenterFreq(SA, freq)) {
+                row[colPow]  = "-";
                 row[colConv] = "-";
                 return;
             }
+
             Thread.Sleep(delay);
 
-            decimal att = 0;
-            decimal.TryParse(attStr, NumberStyles.Any, CultureInfo.InvariantCulture, out att);
+            decimal.TryParse(attStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var att);
 
-            decimal readPow = 0;
-            try {
-                decimal.TryParse(query(SA, ":CALCulate:MARKer:Y?"), NumberStyles.Any,
-                    CultureInfo.InvariantCulture, out readPow);
-            }
-            catch (Exception ex) {
-                log("error: " + ex.Message, false);
-            }
+            decimal readPow = readPower(SA);
+
             decimal diff = coeff * (powGoal - att - readPow + corr);
 
             row[colPow] = readPow.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture).Replace('.', ',');
@@ -466,21 +554,18 @@ namespace Mixer {
 
         public void measure_mix_DSB_down(IProgress<double> prog, DataTable data, CancellationToken token) {
             string GEN = m_IN.Location;
-            string SA = m_OUT.Location;
             string GET = m_LO.Location;
 
-            // TODO: move all sends
-            prepareInstrument(GEN, SA);
-            send(GET, "OUTP:STAT ON");
+            if (!instPrepareForMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO))
+                return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    send(GET, "OUTP:STAT OFF");
-                    releaseInstrument(GEN, SA);
-                    token.ThrowIfCancellationRequested();
+                    instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
                     return;
                 }
+
                 // TODO: convert do decimal?
                 string inPowLO = row["PLO"].ToString().Replace(',', '.');
                 string inPowRF = row["PRF"].ToString().Replace(',', '.');
@@ -490,20 +575,12 @@ namespace Mixer {
                     continue;
                 }
 
-                // TODO: check for empty columns:
-                decimal inPowLOGoalDec = 0;
-                decimal inPowRFGoalDec = 0;
-                decimal inFreqIFDec = 0;
-                decimal inFreqRFDec = 0;
-                decimal inFreqLODec = 0;
-
-                // TODO: exception handling
-                // TODO: need to check for empty cells?
-                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoalDec);
-                decimal.TryParse(row["PRF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowRFGoalDec);
-                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLODec);
-                decimal.TryParse(row["FRF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqRFDec);
-                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIFDec);
+                // TODO: exctract to converson method
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowLOGoalDec);
+                decimal.TryParse(row["PRF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowRFGoalDec);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqLODec);
+                decimal.TryParse(row["FRF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqRFDec);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqIFDec);
                 inFreqLODec *= Constants.GHz;
                 inFreqRFDec *= Constants.GHz;
                 inFreqIFDec *= Constants.GHz;
@@ -526,15 +603,15 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, SA, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
-                measurePower(row, SA, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
-                measurePower(row, SA, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
 
-            releaseInstrument(GEN, SA);
+            instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
             // TODO: move sends to instrumentManager
             send(GET, "OUTP:STAT OFF");
 
@@ -546,14 +623,14 @@ namespace Mixer {
             string SA = m_OUT.Location;
             string GET = m_LO.Location;
 
-            prepareInstrument(GEN, SA);
+            instPrepareForCalib((Generator)m_IN, (Analyzer)m_OUT);
             send(GET, "OUTP:STAT ON");
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
                     send(GET, "OUTP:STAT OFF");
-                    releaseInstrument(GEN, SA);
+                    instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
                     token.ThrowIfCancellationRequested();
                     return;
                 }
@@ -598,14 +675,15 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, SA, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1, 0);
-                measurePower(row, SA, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1, 0);
-                measurePower(row, SA, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
-            releaseInstrument(GEN, SA);
+
+            instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
             send(GET, "OUTP:STAT OFF");
             prog?.Report(100);
         }
@@ -615,14 +693,14 @@ namespace Mixer {
             string SA = m_OUT.Location;
             string GET = m_LO.Location;
 
-            prepareInstrument(GEN, SA);
+            instPrepareForCalib((Generator)m_IN, (Analyzer)m_OUT);
             send(GET, "OUTP:STAT ON");
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
                     send(GET, "OUTP:STAT OFF");
-                    releaseInstrument(GEN, SA);
+                    instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
                     token.ThrowIfCancellationRequested();
                     return;
                 }
@@ -666,7 +744,8 @@ namespace Mixer {
                     log("error: measure: fail setting LO params, skipping row (" + ex.Message + ")", false);
                     continue;
                 }
-                measurePower(row, SA, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
+                measurePower(row, (Analyzer)m_OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
                 try {
                     send(GEN, "SOUR:FREQ " + inFreqLSBDec);
@@ -676,8 +755,9 @@ namespace Mixer {
                     log("error: measure: fail setting IN LSB params, skipping row (" + ex.Message + ")", false);
                     continue;
                 }
-                measurePower(row, SA, inPowLSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-LSB", -1, -3);
-                measurePower(row, SA, inPowLSBGoalDec, inFreqLSBDec, "ATT-LSB", "POUT-LSB", "ISO-LSB", 1, 0);
+
+                measurePower(row, (Analyzer)m_OUT, inPowLSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-LSB", -1, -3);
+                measurePower(row, (Analyzer)m_OUT, inPowLSBGoalDec, inFreqLSBDec, "ATT-LSB", "POUT-LSB", "ISO-LSB", 1, 0);
 
                 try {
                     send(GEN, "SOUR:FREQ " + inFreqUSBDec);
@@ -687,13 +767,15 @@ namespace Mixer {
                     log("error: measure: fail setting IN USB params, skipping row (" + ex.Message + ")", false);
                     continue;
                 }
-                measurePower(row, SA, inPowUSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-USB", -1, -3);
-                measurePower(row, SA, inPowUSBGoalDec, inFreqUSBDec, "ATT-USB", "POUT-USB", "ISO-USB", 1, 0);
+
+                measurePower(row, (Analyzer)m_OUT, inPowUSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-USB", -1, -3);
+                measurePower(row, (Analyzer)m_OUT, inPowUSBGoalDec, inFreqUSBDec, "ATT-USB", "POUT-USB", "ISO-USB", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
-            releaseInstrument(GEN, SA);
+
+            instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
             send(GET, "OUTP:STAT OFF");
             prog?.Report(100);
         }
@@ -759,10 +841,10 @@ namespace Mixer {
                 //send(IN, ("SOUR:FREQ " + t_freq_IF));
                 //send(IN, ("SOUR:POW " + t_pow_IF.Replace(',', '.')));
 
-                measurePower(row, SA, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
-                measurePower(row, SA, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
-                measurePower(row, SA, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
-                measurePower(row, SA, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
+                measurePower(row, (Analyzer)m_OUT, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
+                measurePower(row, (Analyzer)m_OUT, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
+                measurePower(row, (Analyzer)m_OUT, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
@@ -778,12 +860,12 @@ namespace Mixer {
             string IN = m_IN.Location;
             string OUT = m_OUT.Location;
 
-            prepareInstrument(IN, OUT);
+            instPrepareForCalib((Generator)m_IN, (Analyzer)m_OUT);
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    releaseInstrument(IN, OUT);
+                    instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
                     token.ThrowIfCancellationRequested();
                     return;
                 }
@@ -812,15 +894,16 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, OUT, inPowGoal, inFreqH1 * 1, "ATT-H1", "POUT-H1", "CONV-H1", -1, 0);
-                measurePower(row, OUT, inPowGoal, inFreqH1 * 2, "ATT-H2", "POUT-H2", "CONV-H2", -1, 0);
-                measurePower(row, OUT, inPowGoal, inFreqH1 * 3, "ATT-H3", "POUT-H3", "CONV-H3", -1, 0);
-                measurePower(row, OUT, inPowGoal, inFreqH1 * 4, "ATT-H4", "POUT-H4", "CONV-H4", -1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowGoal, inFreqH1 * 1, "ATT-H1", "POUT-H1", "CONV-H1", -1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowGoal, inFreqH1 * 2, "ATT-H2", "POUT-H2", "CONV-H2", -1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowGoal, inFreqH1 * 3, "ATT-H3", "POUT-H3", "CONV-H3", -1, 0);
+                measurePower(row, (Analyzer)m_OUT, inPowGoal, inFreqH1 * 4, "ATT-H4", "POUT-H4", "CONV-H4", -1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
-            releaseInstrument(IN, OUT);
+
+            instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
             prog?.Report(100);
         }
 

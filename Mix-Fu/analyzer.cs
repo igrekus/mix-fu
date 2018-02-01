@@ -8,7 +8,17 @@ using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
 namespace Mixer
 {
-    internal class Analyzer : Instrument {
+    class Analyzer : Instrument {
+
+        public struct AutocalState {
+            public const string AutocalOff = "OFF";
+            public const string AutocalOn = "ON";
+        }
+
+        public struct MarkerMode {
+            public const string ModePos = "POS";
+        }
+
         private AgSCPI99 _instrument;
 
         public Analyzer(string location, string fullname) {
@@ -28,33 +38,37 @@ namespace Mixer
             throw new NotImplementedException();
         }
 
-        public override QueryResult query(string question) {
+        public override string query(string question) {
 #if mock
-            return new QueryResult {code = 0, answer = "analyser query success"};
+            return "analyzer query success: " + question;
 #else
-            string ans;
-            try {
-                _instrument.Transport.Query.Invoke(question, out ans);
-                return new QueryResult { code = 0, answer = ans };
-            }
-            catch (Exception ex) {
-                return new QueryResult { code = -1, answer = ex.Message };
-            }
+            _instrument.Transport.Query.Invoke(question, out var ans);
+            return ans;
 #endif
         }
 
-        public override CommandResult send(string command) {
+        public override string send(string command) {
 #if mock
-            return new CommandResult {code = 0, message = "analyser command success"};
+            return "analyzer command success: " + command;
 #else
-            try {
-                _instrument.Transport.Command.Invoke(command);
-                return new CommandResult { code = 0, message = "analyzer command success" };
-            }
-            catch (Exception ex) {
-                return new CommandResult { code = -1, message = ex.Message };
-            }
+            _instrument.Transport.Command.Invoke(command);
+            return "analyzer command success";
 #endif
         }
+
+        // TODO: make properties?
+        public string SetAutocalibration(string state) => send(":CAL:AUTO " + state);
+
+        public string SetFreqSpan(decimal span) => send(":SENS:FREQ:SPAN " + span);
+
+        public string SetMarkerMode(string mode) => send(":CALC:MARK1:MODE " + mode);
+
+        public string SetPowerAttenuation(decimal att) => send(":POW:ATT " + att);
+
+        public string SetMeasCenterFreq(decimal freq) => send(":SENSe:FREQuency:RF:CENTer " + freq);
+
+        public string SetMarker1XCenter(decimal freq) => send(":CALCulate:MARKer1:X:CENTer " + freq);
+
+        public string ReadMarker1Y() => query(":CALCulate:MARKer:Y?");
     }
 }

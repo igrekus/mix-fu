@@ -9,6 +9,17 @@ using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 namespace Mixer
 {
     internal class Generator : Instrument {
+
+        public struct OutputModulationState {
+            public const string ModulationOff = "OFF";
+            public const string ModulationOn  = "ON";
+        }
+
+        public struct OutputState {
+            public const string OutputOff = "OFF";
+            public const string OutputOn = "ON";
+        }
+
         private AgSCPI99 _instrument;
 
         public Generator(string location, string fullname) {
@@ -28,34 +39,31 @@ namespace Mixer
             throw new NotImplementedException();
         }
 
-        public override QueryResult query(string question) {
+        public override string query(string question) {
 #if mock
-            return new QueryResult { code = 0, answer = "generator query success" };
+            return "generator query success: " + question;
 #else
-            string ans;
-            try {
-                _instrument.Transport.Query.Invoke(question, out ans);
-                return new QueryResult { code = 0, answer = ans };
-            }
-            catch (Exception ex) {
-                return new QueryResult { code = -1, answer = ex.Message };
-            }
+            _instrument.Transport.Query.Invoke(question, out var ans);
+            return ans;
 #endif
         }
 
-        public override CommandResult send(string command) {
+        public override string send(string command) {
 #if mock
-            return new CommandResult { code = 0, message = "generator command success" };
+            return "generator command success: " + command;
 #else
-            try {
-                _instrument.Transport.Command.Invoke(command);
-                return new CommandResult { code = 0, message = "generator command success" };
-            }
-            catch (Exception ex) {
-                return new CommandResult { code = -1, message = ex.Message };
-            }
+            _instrument.Transport.Command.Invoke(command);
+            return "generator command success";
 #endif
         }
+
+        public string SetOutput(string state) => send("OUTP:STAT " + state);
+
+        public string SetOutputModulation(string state) => send(":OUTP:MOD:STAT " + state);
+
+        public string SetSourceFreq(decimal inFreqDec) => send("SOUR:FREQ " + inFreqDec);
+
+        public string SetSourcePow(decimal pow) => send("SOUR:POW " + pow);
     }
 }
 
