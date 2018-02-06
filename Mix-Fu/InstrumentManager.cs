@@ -1,16 +1,11 @@
 #define mock
 
-using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
-using System.Resources;
-using System.Runtime.InteropServices;
 using System.Threading;
-using System.Xml.Serialization;
-using Agilent.CommandExpert.ScpiNet.Ag90x0_SA_A_08_03.SCPI.CONFigure.SANalyzer;
-using OfficeOpenXml.FormulaParsing.Logging;
+using NationalInstruments.VisaNS;
 
 namespace Mixer {
 
@@ -26,18 +21,9 @@ namespace Mixer {
 
         // instrument class registry
         private Dictionary<string, Func<string, string, Instrument>> instrumentRegistry =
-            new Dictionary<string, Func<string, string, Instrument>> {
-                                                                         {
-                                                                             "N9030A",
-                                                                             (loc, idn) => new Analyzer(loc, idn)
-                                                                         }, {
-                                                                             "GEN",
-                                                                             (loc, idn) => new Generator(loc, idn)
-                                                                         }, {
-                                                                             "LO",
-                                                                             (loc, idn) => new Generator(loc, idn)
-                                                                         }
-                                                                     };
+            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A", (loc, idn) => new Analyzer(loc, idn) },
+                                                                       { "GEN", (loc, idn)    => new Generator(loc, idn) },
+                                                                       { "LO", (loc, idn)     => new Generator(loc, idn) } };
         
         // instrument list
         public List<IInstrument> listInstruments = new List<IInstrument>();
@@ -108,50 +94,13 @@ namespace Mixer {
             outParameters.Add(MeasureMode.modeMultiplier, multiplier);
         }
 
-#if mock
-        public void send(string location, string command) {
-            log("send: " + command + " to: " + location, true);
-        }
-        public string query(string location, string question) {
-            log("query: " + question + " to: " + location, true);
-            return "-24.9";
-        }
-#else
-        public void send(string location, string command) {
-            log("debug: send: " + command + " to: " + location, true);
-            try {
-                using (AgSCPI99 instrument = new AgSCPI99(location)) {
-                    instrument.Transport.Command.Invoke(command);
-                }
-            }
-            catch (Exception ex) {
-                throw ex;
-            }
-        }
-        public string query(string location, string question) {
-            log("debug: query: " + question + " to: " + location, true);
-            string answer = "";
-            try {
-                using (AgSCPI99 instrument = new AgSCPI99(location)) {
-                    instrument.Transport.Query.Invoke(question, out answer);
-                }
-            }
-            catch (Exception ex) {
-                throw ex;
-            }
-            return answer;
-        }
-#endif
-
 #region regInstrumentControl
         private string testLocation(string location) {
 #if mock
             var rnd = new Random();
-            var lst = new List<string> {
-                                           "Agilent Technoligies,N9030A,MY49432146,A.11.04",
-                                           "AAAA,GEN,1111",
-                                           "BBBB,LO,2222",
-                                       };
+            var lst = new List<string> { "Agilent Technoligies,N9030A,MY49432146,A.11.04",
+                                         "AAAA,GEN,1111",
+                                         "BBBB,LO,2222" };
             return lst[rnd.Next(lst.Count)];
 #else
             try {
@@ -201,40 +150,49 @@ namespace Mixer {
             log("search done, found " + listInstruments.Count + " device(s)", false);
         }
 
-        private bool instPrepareForCalib(Generator GEN, Analyzer SA) {
+        private bool instPrepareAnalyzer(Analyzer SA) {
             try {
                 SA.SetAutocalibration(Analyzer.AutocalState.AutocalOff);
                 SA.SetFreqSpan(span);
                 SA.SetMarkerMode(Analyzer.MarkerMode.ModePos);
                 SA.SetPowerAttenuation(attenuation);
                 //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString()) // TODO: add this line
-
-                GEN.SetOutputModulation(Generator.OutputModulationState.ModulationOff);
-                GEN.SetOutput(Generator.OutputState.OutputOn);                
             }
             catch (Exception ex) {
                 log("error: can't prepare instruments: " + ex.Message, false);
-                instReleaseFromCalib(GEN, SA);
+                instReleaseAnalyzer(SA);
                 return false;
             }
-            log("prepare instruments", false);
+
+            log("prepare analyzer=" + SA, false);
             return true;
         }
 
-        private bool instPrepareForMeas(Generator GEN, Analyzer SA, Generator LO) {
-            if (!instPrepareForCalib(GEN, SA)) 
-                return false;
-            
+        private bool instPrepareGenerator(Generator GEN) {
             try {
-                LO.SetOutputModulation(Generator.OutputModulationState.ModulationOff);
-                LO.SetOutput(Generator.OutputState.OutputOn);
+                GEN.SetOutputModulation(Generator.OutputModulationState.ModulationOff);
+                GEN.SetOutput(Generator.OutputState.OutputOn);
             }
             catch (Exception ex) {
-                log("error: fail turning LO generator on" + ex.Message, false);
+                log("error: can't prepare instruments: " + ex.Message, false);
+                instReleaseGen(GEN);
                 return false;
             }
 
+            log("prepare gen=" + GEN, false);
             return true;
+        }
+
+        private bool instPrepareForCalib(Generator GEN, Analyzer SA) {
+            return instPrepareAnalyzer(SA) && instPrepareGenerator(GEN);
+        }
+
+        private bool instPrepareForMeas(Generator GEN, Analyzer SA, Generator LO) {
+            return instPrepareForCalib(GEN, SA) && instPrepareGenerator(LO);
+        }
+
+        private bool instPrepareForMeasSSBUp(Analyzer SA, Generator LO) {
+            return instPrepareAnalyzer(SA) && instPrepareGenerator(LO);
         }
 
         private bool instReleaseGen(Generator GEN) {
@@ -283,6 +241,7 @@ namespace Mixer {
             return true;
         }
 
+        // TODO: rename this method
         private bool instSetAnalyzerCenterFreq(Analyzer SA, decimal freq) {
             try {
                 SA.SetMeasCenterFreq(freq);
@@ -295,6 +254,7 @@ namespace Mixer {
             return true;
         }
 
+        // TODO: rename this method
         private bool instSetCalibFreq(Generator GEN, Analyzer SA, decimal freq) {
             if (!instSetAnalyzerCenterFreq(SA, freq))
                 return false;
@@ -310,16 +270,46 @@ namespace Mixer {
             return true;
         }
 
-        private bool instSetGenPowGoal(Generator GEN, decimal pow) {
+        private bool instSetGenPow(Generator GEN, string pow) {
             try {
                 GEN.SetSourcePow(pow);
             }
             catch (Exception ex) {
-                log("error: fail setting calibration pow=" + pow + ", skipping (" + ex.Message + ")", false);
+                log("error: fail setting pow=" + pow + " on gen=" + GEN + ", skipping (" + ex.Message + ")", false);
                 return false;
             }
 
-            log("debug: set calibration pow=" + pow, true);
+            log("debug: set pow=" + pow + " on gen=" + GEN, true);
+            return true;
+        }
+
+        private bool instSetGenPow(Generator GEN, decimal pow) {
+            return instSetGenPow(GEN, pow.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture));
+        }
+
+        private bool instSetGenFreq(Generator GEN, string freq) {
+            try {
+                GEN.SetSourceFreq(freq);
+            }
+            catch (Exception ex) {
+                log("error: fail setting freq=" + freq + " on gen=" + GEN + ", skipping (" + ex.Message + ")", false);
+                return false;
+            }
+
+            log("debug: set freq=" + freq + " on gen=" + GEN, true);
+            return true;
+        }
+
+        private bool instSetGenFreq(Generator GEN, decimal freq) {
+            return instSetGenFreq(GEN, freq.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture));
+        }
+
+        private bool instSetGenFreqPow(Generator GEN, decimal freq, string pow) {
+            if (!instSetGenFreq(GEN, freq) || !instSetGenPow(GEN, pow)) {
+                log("error: measure fail, skipping row", false);
+                return false;
+            }
+
             return true;
         }
 
@@ -332,12 +322,14 @@ namespace Mixer {
             catch (Exception ex) {
                 log("error: can't read power: " + ex.Message, false);
                 return 0;
-            }            
+            }
+
             if (!decimal.TryParse(readpow, NumberStyles.Any, CultureInfo.InvariantCulture,
                                   out var readPowDec)) {
                 log("error: can't parse read pow: " + readpow, false);
                 return 0;
             }
+
             log("debug: read data:" + readPowDec, true);
             return readPowDec;
         }
@@ -409,7 +401,7 @@ namespace Mixer {
                     int count = 0;
                     int tmpDelay = delay;
                     while (count < 5 && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
-                        if (!instSetGenPowGoal(GEN, tempPowDec))
+                        if (!instSetGenPow(GEN, tempPowDec))
                             break;
 
                         Thread.Sleep(tmpDelay);
@@ -479,7 +471,7 @@ namespace Mixer {
             instPrepareForCalib(GEN, SA);
 
             const decimal tempPow = (decimal)-20.00;
-            if (!instSetGenPowGoal(GEN, tempPow))
+            if (!instSetGenPow(GEN, tempPow))
                 return;
 
             var cache = new Dictionary<string, string>();
@@ -540,6 +532,7 @@ namespace Mixer {
                 return;
             }
 
+            // TODO: replace delay with wait for operaton complete from the instrument
             Thread.Sleep(delay);
 
             decimal.TryParse(attStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var att);
@@ -553,9 +546,6 @@ namespace Mixer {
         }
 
         public void measure_mix_DSB_down(IProgress<double> prog, DataTable data, CancellationToken token) {
-            string GEN = m_IN.Location;
-            string GET = m_LO.Location;
-
             if (!instPrepareForMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO))
                 return;
 
@@ -563,10 +553,11 @@ namespace Mixer {
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
                     instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
+                    log("error: task aborted", false);
                     return;
                 }
 
-                // TODO: convert do decimal?
+                // TODO: simplify check (extract method?)
                 string inPowLO = row["PLO"].ToString().Replace(',', '.');
                 string inPowRF = row["PRF"].ToString().Replace(',', '.');
                 if (string.IsNullOrEmpty(inPowLO) || inPowLO == "-" ||
@@ -585,24 +576,16 @@ namespace Mixer {
                 inFreqRFDec *= Constants.GHz;
                 inFreqIFDec *= Constants.GHz;
 
-                // TODO: write "-" into corresponding column on fail
-                try {
-                    send(GEN, "SOUR:FREQ " + inFreqRFDec);
-                    send(GET, "SOUR:FREQ " + inFreqLODec);
-                }
-                catch (Exception ex) {
-                    log("error: measure fail setting freq, skipping row: " + ex.Message, false);
-                    continue;
-                }
-                try {
-                    send(GEN, "SOUR:POW " + inPowRF);
-                    send(GET, "SOUR:POW " + inPowLO);
-                }
-                catch (Exception ex) {
-                    log("error: measure fail setting pow, skipping row: " + ex.Message, false);
+                if (!instSetGenFreqPow((Generator)m_IN, inFreqRFDec, inPowRF) ||
+                    !instSetGenFreqPow((Generator)m_LO, inFreqLODec, inPowLO)) {
+                    // TODO: fix this crap
+                    row["POUT-IF"] = "-"; row["CONV"]   = "-";
+                    row["POUT-RF"] = "-"; row["ISO-RF"] = "-";
+                    row["POUT-LO"] = "-"; row["ISO-LO"] = "-";
                     continue;
                 }
 
+                // TODO: remove code dupe
                 measurePower(row, (Analyzer)m_OUT, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
                 measurePower(row, (Analyzer)m_OUT, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
                 measurePower(row, (Analyzer)m_OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
@@ -611,29 +594,23 @@ namespace Mixer {
                 ++i;
             }
 
-            instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
-            // TODO: move sends to instrumentManager
-            send(GET, "OUTP:STAT OFF");
-
+            instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
             prog?.Report(100);
         }
 
         public void measure_mix_DSB_up(IProgress<double> prog, DataTable data, CancellationToken token) {
-            string GEN = m_IN.Location;
-            string SA = m_OUT.Location;
-            string GET = m_LO.Location;
-
-            instPrepareForCalib((Generator)m_IN, (Analyzer)m_OUT);
-            send(GET, "OUTP:STAT ON");
+            if (!instPrepareForMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO))
+                return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    send(GET, "OUTP:STAT OFF");
-                    instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
-                    token.ThrowIfCancellationRequested();
+                    instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
+                    log("error: task aborted", false);
                     return;
                 }
+
+                // TODO: convert to dec, simplify check
                 string inPowLO = row["PLO"].ToString().Replace(',', '.');
                 string inPowIF = row["PIF"].ToString().Replace(',', '.');
                 if (string.IsNullOrEmpty(inPowLO) || inPowLO == "-" ||
@@ -642,36 +619,20 @@ namespace Mixer {
                     continue;
                 }
 
-                decimal inPowIFGoalDec = 0;
-                decimal inPowLOGoalDec = 0;
-                decimal inFreqLODec = 0;
-                decimal inFreqRFDec = 0;
-                decimal inFreqIFDec = 0;
-
-                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowIFGoalDec);
-                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoalDec);
-                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLODec);
-                decimal.TryParse(row["FRF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqRFDec);
-                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIFDec);
+                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowIFGoalDec);
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowLOGoalDec);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqLODec);
+                decimal.TryParse(row["FRF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqRFDec);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqIFDec);
                 inFreqIFDec *= Constants.GHz;
                 inFreqRFDec *= Constants.GHz;
                 inFreqLODec *= Constants.GHz;
 
-                // TODO: extract method
-                try {
-                    send(GET, "SOUR:FREQ " + inFreqLODec);
-                    send(GEN, "SOUR:FREQ " + inFreqIFDec);
-                }
-                catch (Exception ex) {
-                    log("error: measure fail setting freq, skipping row: " + ex.Message, false);
-                    continue;
-                }
-                try {
-                    send(GET, "SOUR:POW " + inPowLO);
-                    send(GEN, "SOUR:POW " + inPowIF);
-                }
-                catch (Exception ex) {
-                    log("error: measure fail setting pow, skipping row: " + ex.Message, false);
+                if (!instSetGenFreqPow((Generator)m_IN, inFreqIFDec, inPowIF) ||
+                    !instSetGenFreqPow((Generator)m_LO, inFreqLODec, inPowLO)) {
+                    row["POUT-RF"] = "-"; row["CONV"]   = "-";
+                    row["POUT-IF"] = "-"; row["ISO-IF"] = "-";
+                    row["POUT-LO"] = "-"; row["ISO-LO"] = "-";
                     continue;
                 }
 
@@ -683,38 +644,25 @@ namespace Mixer {
                 ++i;
             }
 
-            instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
-            send(GET, "OUTP:STAT OFF");
+            instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
             prog?.Report(100);
         }
 
         public void measure_mix_SSB_down(IProgress<double> prog, DataTable data, CancellationToken token) {
-            string GEN = m_IN.Location;
-            string SA = m_OUT.Location;
-            string GET = m_LO.Location;
-
-            instPrepareForCalib((Generator)m_IN, (Analyzer)m_OUT);
-            send(GET, "OUTP:STAT ON");
+            if (!instPrepareForMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO))
+                return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    send(GET, "OUTP:STAT OFF");
-                    instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
-                    token.ThrowIfCancellationRequested();
+                    instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
+                    log("error: task aborted", false);
                     return;
                 }
+
                 string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
                 string inPowLSBStr = row["PLSB"].ToString().Replace(',', '.');
                 string inPowUSBStr = row["PUSB"].ToString().Replace(',', '.');
-                decimal inFreqLODec = 0;
-                decimal inFreqLSBDec = 0;
-                decimal inFreqUSBDec = 0;
-                decimal inFreqIFDec = 0;
-                decimal inPowLSBGoalDec = 0;
-                decimal inPowUSBGoalDec = 0;
-                decimal inPowLOGoalDec = 0;
-
                 if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
                     string.IsNullOrEmpty(inPowLSBStr) || inPowLSBStr == "-" ||
                     string.IsNullOrEmpty(inPowUSBStr) || inPowUSBStr == "-") {
@@ -722,49 +670,47 @@ namespace Mixer {
                     continue;
                 }
 
-                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoalDec);
-                decimal.TryParse(row["PUSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowUSBGoalDec);
-                decimal.TryParse(row["PLSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLSBGoalDec);
-                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLODec);
-                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIFDec);
-                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqUSBDec);
-                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLSBDec);
-
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowLOGoalDec);
+                decimal.TryParse(row["PUSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowUSBGoalDec);
+                decimal.TryParse(row["PLSB-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowLSBGoalDec);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqLODec);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqIFDec);
+                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqUSBDec);
+                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqLSBDec);
                 inFreqLODec *= Constants.GHz;
                 inFreqIFDec *= Constants.GHz;
                 inFreqLSBDec *= Constants.GHz;
                 inFreqUSBDec *= Constants.GHz;
 
-                // TODO: extract freq-pow setting method, add exception handling
-                try {
-                    send(GET, "SOUR:FREQ " + inFreqLODec);
-                    send(GET, "SOUR:POW " + inPowLOStr);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting LO params, skipping row (" + ex.Message + ")", false);
+                if (!instSetGenFreqPow((Generator)m_LO, inFreqLODec, inPowLOStr)) {
+                    row["POUT-LO"]  = "-"; row["ISO-LO"]   = "-";
+                    row["POUT-IF"]  = "-"; row["CONV-LSB"] = "-";
+                    row["POUT-LSB"] = "-"; row["ISO-LSB"]  = "-";
+                    row["POUT-IF"]  = "-"; row["CONV-USB"] = "-";
+                    row["POUT-USB"] = "-"; row["ISO-USB"]  = "-";
                     continue;
                 }
 
                 measurePower(row, (Analyzer)m_OUT, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
-                try {
-                    send(GEN, "SOUR:FREQ " + inFreqLSBDec);
-                    send(GEN, "SOUR:POW " + inPowLSBStr);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting IN LSB params, skipping row (" + ex.Message + ")", false);
+                if (!instSetGenFreqPow((Generator)m_IN, inFreqLSBDec, inPowLSBStr)) {
+                    row["POUT-LO"]  = "-"; row["ISO-LO"]   = "-";
+                    row["POUT-IF"]  = "-"; row["CONV-LSB"] = "-";
+                    row["POUT-LSB"] = "-"; row["ISO-LSB"]  = "-";
+                    row["POUT-IF"]  = "-"; row["CONV-USB"] = "-";
+                    row["POUT-USB"] = "-"; row["ISO-USB"]  = "-";
                     continue;
                 }
 
                 measurePower(row, (Analyzer)m_OUT, inPowLSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-LSB", -1, -3);
                 measurePower(row, (Analyzer)m_OUT, inPowLSBGoalDec, inFreqLSBDec, "ATT-LSB", "POUT-LSB", "ISO-LSB", 1, 0);
 
-                try {
-                    send(GEN, "SOUR:FREQ " + inFreqUSBDec);
-                    send(GEN, "SOUR:POW " + inPowUSBStr);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting IN USB params, skipping row (" + ex.Message + ")", false);
+                if (!instSetGenFreqPow((Generator)m_IN, inFreqUSBDec, inPowUSBStr)) {
+                    row["POUT-LO"]  = "-"; row["ISO-LO"]   = "-";
+                    row["POUT-IF"]  = "-"; row["CONV-LSB"] = "-";
+                    row["POUT-LSB"] = "-"; row["ISO-LSB"]  = "-";
+                    row["POUT-IF"]  = "-"; row["CONV-USB"] = "-";
+                    row["POUT-USB"] = "-"; row["ISO-USB"]  = "-";
                     continue;
                 }
 
@@ -775,71 +721,48 @@ namespace Mixer {
                 ++i;
             }
 
-            instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
-            send(GET, "OUTP:STAT OFF");
+            instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
             prog?.Report(100);
         }
 
         public void measure_mix_SSB_up(IProgress<double> prog, DataTable data, CancellationToken token) {
-            //            string IN = instrumentManager.m_IN.Location;
-            string SA = m_OUT.Location;
-            string GET = m_LO.Location;
-
-            send(SA, ":CAL:AUTO OFF");
-            send(SA, ":SENS:FREQ:SPAN 1000000");
-            send(SA, ":CALC:MARK1:MODE POS");
-            send(SA, ":POW:ATT " + attenuation);
-            //send(OUT, "DISP: WIND: TRAC: Y: RLEV " + (attenuation - 10).ToString());
-            send(GET, "OUTP:STAT ON");
-            //send(IN, ("OUTP:STAT ON"));
+            if (!instPrepareForMeasSSBUp((Analyzer)m_OUT, (Generator)m_LO))
+                return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    send(SA, ":CAL:AUTO ON");
-                    send(GET, "OUTP:STAT OFF");
-                    //send(IN, "OUTP:STAT OFF");
-                    log("release instrument", false);
-                    token.ThrowIfCancellationRequested();
+                    instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
+                    log("error: task aborted", false);
                     return;
                 }
+
                 string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
                 string inPowIFStr = row["PIF"].ToString().Replace(',', '.');
-
                 if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
                     string.IsNullOrEmpty(inPowIFStr) || inPowIFStr == "-") {
                     log("warning: empty row, skipping", false);
                     continue;
                 }
 
-                decimal inPowIFGoal = 0;
-                decimal inPowLOGoal = 0;
-                decimal inFreqLO = 0;
-                decimal inFreqLSB = 0;
-                decimal inFreqUSB = 0;
-                decimal inFreqIF = 0;
-
-                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowIFGoal);
-                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowLOGoal);
-                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLO);
-                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqLSB);
-                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqUSB);
-                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqIF);
+                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowIFGoal);
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowLOGoal);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqLO);
+                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqLSB);
+                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqUSB);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqIF);
                 inFreqLO *= Constants.GHz;
                 inFreqLSB *= Constants.GHz;
                 inFreqUSB *= Constants.GHz;
                 inFreqIF *= Constants.GHz;
 
-                try {
-                    send(GET, "SOUR:FREQ " + inFreqLO);
-                    send(GET, "SOUR:POW " + inPowLOStr);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting LO params, skipping row (" + ex.Message + ")", false);
+                if (!instSetGenFreqPow((Generator)m_LO, inFreqLO, inPowLOStr)) {
+                    row["POUT-LSB"] = "-"; row["CONV-LSB"] = "-";
+                    row["POUT-USB"] = "-"; row["CONV-USB"] = "-";
+                    row["POUT-IF"]  = "-"; row["ISO-IF"]   = "-";
+                    row["POUT-LO"]  = "-"; row["ISO-LO"]   = "-";
                     continue;
                 }
-                //send(IN, ("SOUR:FREQ " + t_freq_IF));
-                //send(IN, ("SOUR:POW " + t_pow_IF.Replace(',', '.')));
 
                 measurePower(row, (Analyzer)m_OUT, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
                 measurePower(row, (Analyzer)m_OUT, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
@@ -849,48 +772,40 @@ namespace Mixer {
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
-            send(SA, ":CAL:AUTO ON");
-            send(GET, "OUTP:STAT OFF");
-            //send(IN, "OUTP:STAT OFF");
-            log("release instrument", false);
+
+            instReleaseFromMeas((Generator)m_IN, (Analyzer)m_OUT, (Generator)m_LO);
             prog?.Report(100);
         }
 
         public void measure_mult(IProgress<double> prog, DataTable data, CancellationToken token) {
-            string IN = m_IN.Location;
-            string OUT = m_OUT.Location;
-
-            instPrepareForCalib((Generator)m_IN, (Analyzer)m_OUT);
+            if (!instPrepareForCalib((Generator)m_IN, (Analyzer)m_OUT))
+                return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
                     instReleaseFromCalib((Generator)m_IN, (Analyzer)m_OUT);
-                    token.ThrowIfCancellationRequested();
+                    log("error: task aborted", false);
                     return;
                 }
+
                 string inPowGenStr = row["PIN-GEN"].ToString().Replace(',', '.');
                 string inFreqH1Str = row["FH1"].ToString().Replace(',', '.');
-
                 if (string.IsNullOrEmpty(inPowGenStr) || inPowGenStr == "-" ||
                     string.IsNullOrEmpty(inFreqH1Str) || inFreqH1Str == "-") {
                     log("warning: empty row, skipping", false);
                     continue;
                 }
 
-                decimal inPowGoal = 0;
-                decimal inFreqH1 = 0;
-
-                decimal.TryParse(row["PIN-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inPowGoal);
-                decimal.TryParse(row["FH1"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out inFreqH1);
+                decimal.TryParse(row["PIN-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowGoal);
+                decimal.TryParse(row["FH1"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqH1);
                 inFreqH1 *= Constants.GHz;
 
-                try {
-                    send(IN, "SOUR:POW " + inPowGenStr);
-                    send(IN, "SOUR:FREQ " + inFreqH1);
-                }
-                catch (Exception ex) {
-                    log("error: measure: fail setting IN params, skipping row (" + ex.Message + ")", false);
+                if (!instSetGenFreqPow((Generator)m_IN, inFreqH1, inPowGenStr)) {
+                    row["POUT-H1"] = "-"; row["CONV-H1"] = "-";
+                    row["POUT-H2"] = "-"; row["CONV-H2"] = "-";
+                    row["POUT-H3"] = "-"; row["CONV-H3"] = "-";
+                    row["POUT-H4"] = "-"; row["CONV-H4"] = "-";
                     continue;
                 }
 

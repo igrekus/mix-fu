@@ -61,9 +61,13 @@ namespace Mixer
 
         public string SetOutputModulation(string state) => send(":OUTP:MOD:STAT " + state);
 
-        public string SetSourceFreq(decimal inFreqDec) => send("SOUR:FREQ " + inFreqDec);
+        public string SetSourceFreq(decimal freq) => send("SOUR:FREQ " + freq);
+
+        public string SetSourceFreq(string freq) => send("SOUR:FREQ " + freq);
 
         public string SetSourcePow(decimal pow) => send("SOUR:POW " + pow);
+
+        public string SetSourcePow(string pow) => send("SOUR:POW " + pow);
     }
 }
 

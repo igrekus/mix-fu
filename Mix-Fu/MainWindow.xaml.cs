@@ -1,5 +1,4 @@
 using System;
-using System.CodeDom;
 using System.IO;
 using System.Data;
 using System.Linq;
@@ -10,14 +9,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using OfficeOpenXml;
-using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
-using Agilent.CommandExpert.ScpiNet.Ag34410_2_35;
-using Agilent.CommandExpert.ScpiNet.Ag90x0_SA_A_08_03;
 using System.Diagnostics;
 using System.Media;
-using System.Security.RightsManagement;
-using System.Text;
-using NationalInstruments.VisaNS;
 
 namespace Mixer {
 
@@ -27,7 +20,7 @@ namespace Mixer {
         public const int MHz = 1000000;
     }
 
-    enum MeasureMode : byte {
+    public enum MeasureMode : byte {
         modeDSBDown = 0,
         modeDSBUp,
         modeSSBDown,
@@ -62,8 +55,10 @@ namespace Mixer {
 
 #region regDataMembers
         // TODO: switch TryParse overloads
-        // TODO: autoscroll table
-        // TODO: write calibration type to logs
+        // TODO: detect wrong table for given measurement
+
+        // done: autoscroll table
+        //       write calibration type to logs
 
         DataTable dataTable;
         string inFile = "";
@@ -77,6 +72,7 @@ namespace Mixer {
         private const string alert_filename = @".\alert.wav";
         private SoundPlayer sndAlert;
 
+        private Dictionary<MeasureMode, Action<IProgress<double>, DataTable, CancellationToken>> measureTaskDict;
         private Task searchTask;
         private Task calibrationTask;
         private Task measureTask;
@@ -94,8 +90,13 @@ namespace Mixer {
 
         public MainWindow() {
             instrumentManager = new InstrumentManager(log);
-
-//            DataContext = listInstruments;
+            measureTaskDict = new Dictionary<MeasureMode, Action<IProgress<double>, DataTable, CancellationToken>> {
+                { MeasureMode.modeDSBDown,    (progress, table, token) => instrumentManager.measure_mix_DSB_down(progress, table, token) },
+                { MeasureMode.modeDSBUp,      (progress, table, token) => instrumentManager.measure_mix_DSB_up(progress, table, token) },
+                { MeasureMode.modeSSBDown,    (progress, table, token) => instrumentManager.measure_mix_SSB_down(progress, table, token) },
+                { MeasureMode.modeSSBUp,      (progress, table, token) => instrumentManager.measure_mix_SSB_up(progress, table, token) },
+                { MeasureMode.modeMultiplier, (progress, table, token) => instrumentManager.measure_mult(progress, table, token) }
+            };
 
             InitializeComponent();
 
@@ -335,8 +336,8 @@ namespace Mixer {
             var progress = progressHandler as IProgress<double>;
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
-            log("start calibrate: " + mode + ", IN");
-            calibrate(() => instrumentManager.calibrateIn(progress, dataTable, instrumentManager.inParameters[mode], token), token);
+
+            calibrate(() => instrumentManager.calibrateIn(progress, dataTable, instrumentManager.inParameters[mode], token), token, mode);
         }
 
         private void btnCalibrateLoClicked(object sender, RoutedEventArgs e) {
@@ -349,8 +350,7 @@ namespace Mixer {
             calibrationTokenSource  = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
             log("start calibrate: " + mode + ", LO");
-            calibrate(() => instrumentManager.calibrateLo(progress, dataTable, instrumentManager.loParameters, token),
-                      token);
+            calibrate(() => instrumentManager.calibrateLo(progress, dataTable, instrumentManager.loParameters, token), token, mode);
         }
 
         private void btnCalibrateOutClicked(object sender, RoutedEventArgs e) {
@@ -362,9 +362,8 @@ namespace Mixer {
             var progress = progressHandler as IProgress<double>;
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
-            log("start calibrate: " + mode + ", OUT");
-            calibrate(() => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode],
-                                                           mode, token), token);
+
+            calibrate(() => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode], mode, token), token, mode);
         }
 
         private void btnCancelCalibrationClicked(object sender, RoutedEventArgs e) {
@@ -375,17 +374,16 @@ namespace Mixer {
 
         // measure buttons
         private void btnMeasureClicked(object sender, RoutedEventArgs e) {
-            // TODO: fix this try-catch
-            try {
-                if (!canMeasure()) {
-                    MessageBox.Show("Error: check log");
-                    return;
-                }
-                measure();
+            if (!canMeasure()) {
+                MessageBox.Show("Error: check log");
+                return;
             }
-            catch (Exception ex) {
-                log("error: " + ex.Message);
-            }
+
+            var progress            = progressHandler as IProgress<double>;
+            calibrationTokenSource  = new CancellationTokenSource();
+            CancellationToken token = calibrationTokenSource.Token;
+
+            measure(() => measureTaskDict[mode](progress, dataTable, token), token);
         }
 
         private void btnCancelMeasureClicked(object sender, RoutedEventArgs e) {
@@ -519,11 +517,12 @@ namespace Mixer {
             return true;
         }
 
-        public async void calibrate(Action func, CancellationToken token) {
+        public async void calibrate(Action func, CancellationToken token, MeasureMode mode) {
             btnCancelCalibration.Visibility = Visibility.Visible;
             btnCalibrateIn.Visibility = Visibility.Hidden;
             btnCalibrateOut.Visibility = Visibility.Hidden;
             btnCalibrateLo.Visibility = Visibility.Hidden;
+            log("start calibrate: " + mode + calibtype);
 
             var stopwatch = Stopwatch.StartNew();
 
@@ -584,56 +583,28 @@ namespace Mixer {
             return true;
         }
 
-        public async void measure() {
+        public async void measure(Action func, CancellationToken token) {
             btnMeasure.Visibility = Visibility.Hidden;
             btnCancelMeasure.Visibility = Visibility.Visible;
             log("start measure: " + mode);
+
             var stopwatch = Stopwatch.StartNew();
+
 //            dataGrid.ScrollIntoView();
             dataTable = ((DataView)dataGrid.ItemsSource).ToTable();
 
-            measureTokenSource = new CancellationTokenSource();
-            CancellationToken token = measureTokenSource.Token;
+            measureTask = Task.Run(func, token);
+            dataGrid.ItemsSource = dataTable.AsDataView();
+            await measureTask;
 
-            var progress = progressHandler as IProgress<double>;
-            try {
-                switch (mode) {
-                    case MeasureMode.modeDSBDown:
-                        measureTask = Task.Run(() =>
-                            instrumentManager.measure_mix_DSB_down(progress, dataTable, token), token);
-                        break;
-                    case MeasureMode.modeDSBUp:
-                        measureTask = Task.Run(() =>
-                            instrumentManager.measure_mix_DSB_up(progress, dataTable, token), token);
-                        break;
-                    case MeasureMode.modeSSBDown:
-                        measureTask = Task.Run(() => instrumentManager.measure_mix_SSB_down(progress, dataTable, token),
-                            token);
-                        break;
-                    case MeasureMode.modeSSBUp:
-                        measureTask = Task.Run(() => instrumentManager.measure_mix_SSB_up(progress, dataTable, token),
-                            token);
-                        break;
-                    case MeasureMode.modeMultiplier:
-                        measureTask = Task.Run(() => instrumentManager.measure_mult(progress, dataTable, token), token);
-                        break;
-                    default:
-                        return;
-                }
-                dataGrid.ItemsSource = dataTable.AsDataView();
-                await measureTask;
-            }
-            catch (Exception ex) {
-                log("error: " + ex.Message);
-            }
-            finally {
-                stopwatch.Stop();
-                log("end measure, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
-                sndAlert?.Play();
-                btnMeasure.Visibility = Visibility.Visible;
-                btnCancelMeasure.Visibility = Visibility.Hidden;
-                MessageBox.Show("Task complete.");
-            }
+            btnMeasure.Visibility       = Visibility.Visible;
+            btnCancelMeasure.Visibility = Visibility.Hidden;
+
+            stopwatch.Stop();
+            log("end measure, run time: " + Math.Round(stopwatch.Elapsed.TotalMilliseconds / 1000, 2) + " sec", false);
+            sndAlert?.Play();
+            MessageBox.Show("Task complete.");
+
         }
 
 #endregion regMeasurementManager
