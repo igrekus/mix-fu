@@ -184,23 +184,23 @@ namespace Mixer {
 
         // comboboxes
         private void comboIN_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager.m_IN = (IInstrument)((ComboBox)sender).SelectedItem;
-            if (instrumentManager.m_IN != null) {
-                log(instrumentManager.m_IN.ToString(), true);
+            instrumentManager._gen = (IInstrument)((ComboBox)sender).SelectedItem;
+            if (instrumentManager._gen != null) {
+                log(instrumentManager._gen.ToString(), true);
             }
         }
 
         private void comboOUT_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager.m_OUT = (IInstrument)((ComboBox)sender).SelectedItem;
-            if (instrumentManager.m_IN != null) {
-                log(instrumentManager.m_OUT.ToString(), true);
+            instrumentManager._sa = (IInstrument)((ComboBox)sender).SelectedItem;
+            if (instrumentManager._gen != null) {
+                log(instrumentManager._sa.ToString(), true);
             }
         }
 
         private void comboLO_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager.m_LO = (IInstrument)((ComboBox)sender).SelectedItem;
-            if (instrumentManager.m_IN != null) {
-                log(instrumentManager.m_LO.ToString(), true);
+            instrumentManager._lo = (IInstrument)((ComboBox)sender).SelectedItem;
+            if (instrumentManager._gen != null) {
+                log(instrumentManager._lo.ToString(), true);
             }
         }
 
@@ -231,17 +231,6 @@ namespace Mixer {
 
             btnStopSearch.Visibility = Visibility.Hidden;
             btnSearch.Visibility = Visibility.Visible;
-//            try {
-//                string loc = "USB0::0x4348::0x5537::NI-VISA-10001::RAW";
-//                var usbRaw = (UsbRaw)ResourceManager.GetLocalManager().Open(loc);
-//                usbRaw.Write("Source1:Apply:Sin 10kHz\n");
-//                log(usbRaw.Query("Source1:Apply?"));
-//                usbRaw.Write("System:Local\n");
-//            }
-//            catch (Exception ex) {
-//                log("error: " + ex.Message, false);
-//            }
-
         }
 
         private void btnStopSearchClicked(object sender, RoutedEventArgs e) {
@@ -264,7 +253,7 @@ namespace Mixer {
                 return;
             string question = textBox_query.Text;
             log(">>> query: " + question);
-            var result = instrumentManager.m_OUT.query(question);
+            var result = instrumentManager._sa.query(question);
             log("> " + result);
         }
 
@@ -273,7 +262,7 @@ namespace Mixer {
                 return;
             string command = textBox_query.Text;
             log(">>> command: " + command);
-            var result = instrumentManager.m_OUT.send(command);
+            var result = instrumentManager._sa.send(command);
             log("> " + result);
         }
 
@@ -337,7 +326,7 @@ namespace Mixer {
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
 
-            calibrate(() => instrumentManager.calibrateIn(progress, dataTable, instrumentManager.inParameters[mode], token), token, mode);
+            calibrate(() => instrumentManager.calibrateIn(progress, dataTable, instrumentManager.inParameters[mode], token), token, mode, "IN");
         }
 
         private void btnCalibrateLoClicked(object sender, RoutedEventArgs e) {
@@ -350,7 +339,7 @@ namespace Mixer {
             calibrationTokenSource  = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
             log("start calibrate: " + mode + ", LO");
-            calibrate(() => instrumentManager.calibrateLo(progress, dataTable, instrumentManager.loParameters, token), token, mode);
+            calibrate(() => instrumentManager.calibrateLo(progress, dataTable, instrumentManager.loParameters, token), token, mode, "LO");
         }
 
         private void btnCalibrateOutClicked(object sender, RoutedEventArgs e) {
@@ -363,7 +352,7 @@ namespace Mixer {
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
 
-            calibrate(() => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode], mode, token), token, mode);
+            calibrate(() => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode], mode, token), token, mode, "OUT");
         }
 
         private void btnCancelCalibrationClicked(object sender, RoutedEventArgs e) {
@@ -517,12 +506,12 @@ namespace Mixer {
             return true;
         }
 
-        public async void calibrate(Action func, CancellationToken token, MeasureMode mode) {
+        public async void calibrate(Action func, CancellationToken token, MeasureMode mode, string calibtype) {
             btnCancelCalibration.Visibility = Visibility.Visible;
             btnCalibrateIn.Visibility = Visibility.Hidden;
             btnCalibrateOut.Visibility = Visibility.Hidden;
             btnCalibrateLo.Visibility = Visibility.Hidden;
-            log("start calibrate: " + mode + calibtype);
+            log("start calibrate: " + mode + ", " + calibtype);
 
             var stopwatch = Stopwatch.StartNew();
 
@@ -564,10 +553,20 @@ namespace Mixer {
                 log("error: no LO instrument selected");
                 return false;
             }
-            if (comboIN.SelectedItem.GetType() != typeof(Generator)) {
-                log("error: IN instrument must be a Generator");
-                return false;
+
+            if (mode != MeasureMode.modeSSBUp) {
+                if (comboIN.SelectedItem.GetType() != typeof(Generator)) {
+                    log("error: IN instrument must be a Generator");
+                    return false;
+                }
             }
+            else {
+                if (comboIN.SelectedItem.GetType() != typeof(Akip3407)) {
+                    log("error: IN unstrument must be АКИП-3407");
+                    return false;
+                }
+            }
+
             if (comboOUT.SelectedItem.GetType() != typeof(Analyzer)) {
                 log("error: OUT instrument must be an Analyzer");
                 return false;

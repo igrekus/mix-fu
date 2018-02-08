@@ -180,6 +180,7 @@
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="AKIP3407.cs" />
     <Compile Include="generator.cs" />
     <Compile Include="InstrumentManager.cs" />
     <Compile Include="MainWindow.xaml.cs">

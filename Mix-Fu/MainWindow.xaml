@@ -9,8 +9,8 @@
     <Window.Resources>
         <DataTemplate DataType="{x:Type local:Instrument}" >
             <StackPanel Orientation="Vertical" Background="{x:Null}">
-                <TextBlock Text="{Binding Name}" FontWeight="Bold"/>
-                <TextBlock Text="{Binding Location}" FontSize="10.667" FontStyle="Normal" TextDecorations="{x:Null}" />
+                <TextBlock Text="{Binding Name}" FontWeight="Bold" HorizontalAlignment="Left" />
+                <TextBlock Text="{Binding Location}" FontSize="10.667" FontStyle="Normal" TextDecorations="{x:Null}" HorizontalAlignment="Left" />
             </StackPanel>
         </DataTemplate>
     </Window.Resources>

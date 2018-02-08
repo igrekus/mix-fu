@@ -1,45 +1,34 @@
 ﻿#define mock
 using System;
-using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
+using NationalInstruments.VisaNS;
 
-namespace Mixer
-{
-    internal class Generator : Instrument {
+namespace Mixer {
+    internal class Akip3407 : Instrument {
 
-        public struct OutputModulationState {
-            public const string ModulationOff = "OFF";
-            public const string ModulationOn  = "ON";
-        }
+        private UsbRaw _instrument;
 
-        public struct OutputState {
-            public const string OutputOff = "OFF";
-            public const string OutputOn = "ON";
-        }
-
-        private AgSCPI99 _instrument;
-
-        public Generator(string location, string fullname) {
+        public Akip3407(string location, string fullname) {
             Location = location;
             FullName = fullname;
-            Name = fullname.Split(',')[1];
+            Name     = fullname.Split(',')[1];
 
             try {
-                _instrument = new AgSCPI99(location);
+                _instrument = (UsbRaw)ResourceManager.GetLocalManager().Open(location);
             }
             catch (Exception ex) {
                 // ignored
             }
         }
 
-        public Generator(string location) {
+        public Akip3407(string location) {
             throw new NotImplementedException();
         }
 
         public override string query(string question) {
 #if mock
-            return "generator query success: " + question;
+            return "akip query success: " + question;
 #else
-            _instrument.Transport.Query.Invoke(question, out var ans);
+            string ans = _instrument.Query(question);
             return ans;
 #endif
         }
@@ -48,8 +37,8 @@ namespace Mixer
 #if mock
             return "generator command success: " + command;
 #else
-            _instrument.Transport.Command.Invoke(command);
-            return "generator command success";
+            _instrument.Write(command);
+            return "akip command success";
 #endif
         }
 
@@ -66,4 +55,3 @@ namespace Mixer
         public string SetSourcePow(string pow) => send("SOUR:POW " + pow);
     }
 }
-

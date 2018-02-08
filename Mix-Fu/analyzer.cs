@@ -1,9 +1,5 @@
 ﻿#define mock
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
 namespace Mixer
