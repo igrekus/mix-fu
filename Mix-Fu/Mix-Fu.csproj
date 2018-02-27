@@ -125,10 +125,10 @@
       <HintPath>C:\Program Files\Agilent\IO Libraries Suite\Agilent.TMFramework.InternalUtils.WinForms.dll</HintPath>
     </Reference>
     <Reference Include="AgSCPI99_1_0">
-      <HintPath>..\..\dll\AgSCPI99_1_0.dll</HintPath>
+      <HintPath>C:\devtools\!dll\AgSCPI99_1_0.dll</HintPath>
     </Reference>
     <Reference Include="EPPlus">
-      <HintPath>..\..\dll\EPPlus.dll</HintPath>
+      <HintPath>C:\devtools\!dll\EPPlus.dll</HintPath>
     </Reference>
     <Reference Include="NationalInstruments.Common, Version=13.0.40.190, Culture=neutral, PublicKeyToken=dc6ad606294fc298, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -175,13 +175,16 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Compile Include="Akip3407Mock.cs" />
     <Compile Include="analyzer.cs" />
+    <Compile Include="analyzer_mock.cs" />
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="AKIP3407.cs" />
     <Compile Include="generator.cs" />
+    <Compile Include="generator_mock.cs" />
     <Compile Include="InstrumentManager.cs" />
     <Compile Include="MainWindow.xaml.cs">
       <DependentUpon>MainWindow.xaml</DependentUpon>

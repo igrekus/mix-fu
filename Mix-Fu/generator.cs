@@ -1,5 +1,4 @@
-﻿#define mock
-using System;
+﻿using System;
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
 namespace Mixer
@@ -36,21 +35,13 @@ namespace Mixer
         }
 
         public override string query(string question) {
-#if mock
-            return "generator query success: " + question;
-#else
             _instrument.Transport.Query.Invoke(question, out var ans);
             return ans;
-#endif
         }
 
         public override string send(string command) {
-#if mock
-            return "generator command success: " + command;
-#else
             _instrument.Transport.Command.Invoke(command);
             return "generator command success";
-#endif
         }
 
         public string SetOutput(string state) => send("OUTP:STAT " + state);

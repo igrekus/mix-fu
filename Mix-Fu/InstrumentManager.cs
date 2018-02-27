@@ -1,4 +1,4 @@
-#define mock
+//#define mock
 
 using System;
 using System.Collections.Generic;
@@ -26,11 +26,22 @@ namespace Mixer {
 
         // instrument class registry
         private Dictionary<string, Func<string, string, Instrument>> instrumentRegistry =
-            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A", (loc, idn) => new Analyzer(loc, idn) },
-                                                                       { "GEN", (loc, idn)    => new Generator(loc, idn) },
-                                                                       { "LO", (loc, idn)     => new Generator(loc, idn) },
-                                                                       { "AKIP", (loc, idn)   => new Akip3407(loc, idn) } };
-        
+#if mock
+            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A", (loc, idn)    => new AnalyzerMock(loc, idn) },
+                                                                     { "E4438C", (loc, idn)    => new GeneratorMock(loc, idn) },
+                                                                     { "N5181B", (loc, idn)    => new GeneratorMock(loc, idn) },
+                                                                     { "N5183A", (loc, idn)    => new GeneratorMock(loc, idn) },
+                                                                     { "HMC-T2100", (loc, idn) => new GeneratorMock(loc, idn) },
+                                                                     { "AKIP", (loc, idn)      => new Akip3407Mock(loc, idn) } };
+#else
+            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A", (loc, idn)    => new Analyzer(loc, idn) },
+                                                                       { "E4438C", (loc, idn)    => new Generator(loc, idn) },
+                                                                       { "N5181B", (loc, idn)    => new Generator(loc, idn) },
+                                                                       { "N5183A", (loc, idn)    => new Generator(loc, idn) },
+                                                                       { "HMC-T2100", (loc, idn) => new Generator(loc, idn) },
+                                                                       { "AKIP", (loc, idn)      => new Akip3407(loc, idn) } };
+#endif
+
         // instrument list
         public List<IInstrument> listInstruments = new List<IInstrument>();
 
@@ -102,11 +113,11 @@ namespace Mixer {
 
 #region regInstrumentControl
         private string testLocation(string location, int index) {
+//            TODO: rewrite test logic (make factory?)
 #if mock
             var lst = new List<string> { "Agilent Technoligies,N9030A,MY49432146,A.11.04",
-                                         "AAAA,GEN,1111",
-                                         "BBBB,LO,2222",
-                                         "CCCC,AKIP,3333" };
+                                         "Agilent Technologies, E4438C, MY49070418, C.05.28",
+                                         "Hittite,HMC-T2100,000796,2.2 5.8" };
             return lst[index];
 #else
             try {
@@ -124,7 +135,7 @@ namespace Mixer {
 
         private string testAkip(string locatcion) {
 #if mock
-            return "ÀÊÈÏ,ÀÊÈÏ-3407,¹11111";
+            return "AKIP,AKIP-3407,s/n 11111";
 #else
             try {
                 var usbRaw = (UsbRaw)ResourceManager.GetLocalManager().Open(locatcion);
@@ -154,7 +165,7 @@ namespace Mixer {
                 string idn = testLocation(location, i); 
                 if (!string.IsNullOrEmpty(idn)) {
                     string name = idn.Split(',')[1];
-                    listInstruments.Add(instrumentRegistry[name](location, idn));
+                    listInstruments.Add(instrumentRegistry[name.Trim()](location, idn));
                 }
                 log("found " + idn + " at " + location, false);
                 prog?.Report((double)i / maxPort * 100);
@@ -214,15 +225,16 @@ namespace Mixer {
         private bool instPrepareAkip(Akip3407 GEN) {
             try {
                 // TODO: setload -> 50ohm, then set ampunit = dbm
-                GEN.SetSourceFunction(Akip3407.Channels.Channel1, Akip3407.Function.Sinusoid);
-                GEN.SetSourceFunction(Akip3407.Channels.Channel2, Akip3407.Function.Sinusoid);
-                GEN.SetSourceVoltageOffset(Akip3407.Channels.Channel1, 0);
-                GEN.SetSourceVoltageOffset(Akip3407.Channels.Channel2, 0);
-                GEN.SetOutputLoad(Akip3407.Outputs.Output1, 50);
-                GEN.SetOutputLoad(Akip3407.Outputs.Output2, 50);
-                GEN.SetOutputUnit(Akip3407.Outputs.Output1, "dBm");
-                GEN.SetOutputUnit(Akip3407.Outputs.Output2, "dBm");
-                
+                log("dummy", true);
+//                GEN.SetSourceFunction(Akip3407.Channels.Channel1, Akip3407.Function.Sinusoid);
+//                GEN.SetSourceFunction(Akip3407.Channels.Channel2, Akip3407.Function.Sinusoid);
+//                GEN.SetSourceVoltageOffset(Akip3407.Channels.Channel1, 0);
+//                GEN.SetSourceVoltageOffset(Akip3407.Channels.Channel2, 0);
+//                GEN.SetOutputLoad(Akip3407.Outputs.Output1, 50);
+//                GEN.SetOutputLoad(Akip3407.Outputs.Output2, 50);
+//                GEN.SetOutputUnit(Akip3407.Outputs.Output1, "dBm");
+//                GEN.SetOutputUnit(Akip3407.Outputs.Output2, "dBm");
+
             }
             catch (Exception ex) {
                 log("error: can't prepare instruments: " + ex.Message, false);
@@ -270,7 +282,7 @@ namespace Mixer {
         }
 
         private bool instReleaseAkip(Akip3407 GEN) {
-            aasdad
+//            aasdad
             try {
                 GEN.SetOutput(Generator.OutputState.OutputOff);
             }

@@ -2,35 +2,26 @@
 using NationalInstruments.VisaNS;
 
 namespace Mixer {
-    internal class Akip3407 : Instrument {
+    internal class Akip3407Mock : Instrument {
 
         private UsbRaw _instrument;
 
-        public Akip3407(string location, string fullname) {
+        public Akip3407Mock(string location, string fullname) {
             Location = location;
             FullName = fullname;
             Name     = fullname.Split(',')[1];
-
-            try {
-                _instrument = (UsbRaw)ResourceManager.GetLocalManager().Open(location);
-            }
-            catch (Exception ex) {
-                // ignored
-            }
         }
 
-        public Akip3407(string location) {
+        public Akip3407Mock(string location) {
             throw new NotImplementedException();
         }
 
         public override string query(string question) {
-            string ans = _instrument.Query(question);
-            return ans;
+            return "akip query success: " + question;
         }
 
         public override string send(string command) {
-            _instrument.Write(command);
-            return "akip command success";
+            return "generator command success: " + command;
         }
 
         public string SetOutput(string state) => send("OUTP:STAT " + state);

@@ -1,36 +1,36 @@
 ﻿using System;
-using NationalInstruments.VisaNS;
 
-namespace Mixer {
-    internal class Akip3407 : Instrument {
+namespace Mixer
+{
+    internal class GeneratorMock : Instrument {
 
-        private UsbRaw _instrument;
-
-        public Akip3407(string location, string fullname) {
-            Location = location;
-            FullName = fullname;
-            Name     = fullname.Split(',')[1];
-
-            try {
-                _instrument = (UsbRaw)ResourceManager.GetLocalManager().Open(location);
-            }
-            catch (Exception ex) {
-                // ignored
-            }
+        public struct OutputModulationState {
+            public const string ModulationOff = "OFF";
+            public const string ModulationOn  = "ON";
         }
 
-        public Akip3407(string location) {
+        public struct OutputState {
+            public const string OutputOff = "OFF";
+            public const string OutputOn = "ON";
+        }
+
+        public GeneratorMock(string location, string fullname) {
+            Location = location;
+            FullName = fullname;
+            Name = fullname.Split(',')[1];
+        }
+
+        public GeneratorMock(string location) {
             throw new NotImplementedException();
         }
 
         public override string query(string question) {
-            string ans = _instrument.Query(question);
-            return ans;
+            // TODO: mock queries correctly
+            return "generator query success: " + question;
         }
 
         public override string send(string command) {
-            _instrument.Write(command);
-            return "akip command success";
+            return "generator command success: " + command;
         }
 
         public string SetOutput(string state) => send("OUTP:STAT " + state);
@@ -46,3 +46,4 @@ namespace Mixer {
         public string SetSourcePow(string pow) => send("SOUR:POW " + pow);
     }
 }
+

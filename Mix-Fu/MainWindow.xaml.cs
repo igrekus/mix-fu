@@ -221,9 +221,16 @@ namespace Mixer {
 
             instrumentManager.listInstruments.Clear();
 
-            var progress = progressHandler as IProgress<double>;
-            searchTask = Task.Run(() => instrumentManager.searchInstruments(progress, maxPort, gpib, token), token);
-            await searchTask;
+            try
+            {
+                var progress = progressHandler as IProgress<double>;
+                searchTask = Task.Run(() => instrumentManager.searchInstruments(progress, maxPort, gpib, token), token);
+                await searchTask;
+            }
+            catch (Exception ex)
+            {
+                log(ex.Message, false);
+            }
 
             comboIN.Items.Refresh();
             comboOUT.Items.Refresh();

@@ -1,9 +1,8 @@
 ﻿using System;
-using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
 namespace Mixer
 {
-    class Analyzer : Instrument {
+    class AnalyzerMock : Instrument {
 
         public struct AutocalState {
             public const string AutocalOff = "OFF";
@@ -14,33 +13,23 @@ namespace Mixer
             public const string ModePos = "POS";
         }
 
-        private AgSCPI99 _instrument;
-
-        public Analyzer(string location, string fullname) {
+        public AnalyzerMock(string location, string fullname) {
             Location = location;
             FullName = fullname;
             Name = fullname.Split(',')[1];
-
-            try {
-                _instrument = new AgSCPI99(location);
-            }
-            catch (Exception ex) {
-                // ignored
-            }
         }
 
-        public Analyzer(string location) {
+        public AnalyzerMock(string location) {
             throw new NotImplementedException();
         }
-
+        
+        // TODO: mock queries correctly
         public override string query(string question) {
-            _instrument.Transport.Query.Invoke(question, out var ans);
-            return ans;
+            return "analyzer query success: " + question;
         }
 
         public override string send(string command) {
-            _instrument.Transport.Command.Invoke(command);
-            return "analyzer command success";
+            return "analyzer command success: " + command;
         }
 
         // TODO: make properties?
