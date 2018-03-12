@@ -2,7 +2,8 @@
 using NationalInstruments.VisaNS;
 
 namespace Mixer {
-    internal class Akip3407 : Instrument {
+    // TODO: inherit Generator
+    internal class Akip3407 : Instrument, IGenerator {
 
         private UsbRaw _instrument;
 
@@ -19,19 +20,19 @@ namespace Mixer {
             }
         }
 
-        public Akip3407(string location) {
-            throw new NotImplementedException();
-        }
-
-        public override string query(string question) {
+        protected virtual string query(string question) {
             string ans = _instrument.Query(question);
             return ans;
         }
 
-        public override string send(string command) {
+        protected virtual string send(string command) {
             _instrument.Write(command);
             return "akip command success";
         }
+
+        public override string RawQuery(string question) => query(question);
+
+        public override string RawCommand(string command) => send(command);
 
         public string SetOutput(string state) => send("OUTP:STAT " + state);
 

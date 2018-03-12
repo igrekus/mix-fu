@@ -1,11 +1,11 @@
-//#define mock
+#define mock
 
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Threading;
+using Agilent.CommandExpert.ScpiNet.AgMXG_A_01_80;
 using NationalInstruments.VisaNS;
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
@@ -15,6 +15,50 @@ namespace Mixer {
         public string colFreq;
         public string colPow;
         public string colPowGoal;
+    }
+
+    interface IInstrument {
+        string Location { get; set; }
+        string Name { get; set; }
+        string FullName { get; set; }
+        string RawQuery(string question);
+        string RawCommand(string command);
+    }
+
+    // TODO: make general interface functions
+    interface IGenerator {
+        string SetOutput(string state);
+        string SetOutputModulation(string state);
+        string SetSourceFreq(decimal freq);
+        string SetSourceFreq(string freq);
+        string SetSourcePow(decimal pow);
+        string SetSourcePow(string pow);
+    }
+
+    // TODO: make general interface functions
+    interface IAnalyzer {
+        string SetAutocalibration(string state);
+        string SetFreqSpan(decimal span);
+        string SetMarkerMode(string mode);
+        string SetPowerAttenuation(decimal att);
+        string SetMeasCenterFreq(decimal freq);
+        string SetMarker1XCenter(decimal freq);
+        string ReadMarker1Y();
+    }
+
+    abstract class Instrument : IInstrument {
+        public string Location { get; set; }
+        public string Name { get; set; }
+        public string FullName { get; set; }
+
+        public abstract string RawQuery(string question);
+        public abstract string RawCommand(string command);
+
+        public override string ToString() {
+            return base.ToString() + ": " + "loc: " + Location +
+                   " name:" + Name +
+                   " fname:" + FullName;
+        }
     }
 
     class InstrumentManager {
@@ -27,19 +71,19 @@ namespace Mixer {
         // instrument class registry
         private Dictionary<string, Func<string, string, Instrument>> instrumentRegistry =
 #if mock
-            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A", (loc, idn)    => new AnalyzerMock(loc, idn) },
-                                                                     { "E4438C", (loc, idn)    => new GeneratorMock(loc, idn) },
-                                                                     { "N5181B", (loc, idn)    => new GeneratorMock(loc, idn) },
-                                                                     { "N5183A", (loc, idn)    => new GeneratorMock(loc, idn) },
-                                                                     { "HMC-T2100", (loc, idn) => new GeneratorMock(loc, idn) },
-                                                                     { "AKIP", (loc, idn)      => new Akip3407Mock(loc, idn) } };
+            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A", (loc, idn)    => new AnalyzerMock(loc, idn) } ,
+                                                                       { "E4438C", (loc, idn)    => new GeneratorMock(loc, idn) },
+                                                                       { "N5181B", (loc, idn)    => new GeneratorMock(loc, idn) },
+                                                                       { "N5183A", (loc, idn)    => new GeneratorMock(loc, idn) },
+                                                                       { "HMC-T2100", (loc, idn) => new GeneratorMock(loc, idn) },
+                                                                       { "AKIP", (loc, idn)      => new Akip3407Mock(loc, idn) } };
 #else
-            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A", (loc, idn)    => new Analyzer(loc, idn) },
-                                                                       { "E4438C", (loc, idn)    => new Generator(loc, idn) },
-                                                                       { "N5181B", (loc, idn)    => new Generator(loc, idn) },
-                                                                       { "N5183A", (loc, idn)    => new Generator(loc, idn) },
-                                                                       { "HMC-T2100", (loc, idn) => new Generator(loc, idn) },
-                                                                       { "AKIP", (loc, idn)      => new Akip3407(loc, idn) } };
+            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A",    (loc, idn) => new Analyzer (loc, idn) },
+                                                                       { "E4438C",    (loc, idn) => new Generator(loc, idn) },
+                                                                       { "N5181B",    (loc, idn) => new Generator(loc, idn) },
+                                                                       { "N5183A",    (loc, idn) => new Generator(loc, idn) },
+                                                                       { "HMC-T2100", (loc, idn) => new HMC_T2100(loc, idn) },
+                                                                       { "AKIP",      (loc, idn) => new Akip3407 (loc, idn) } };
 #endif
 
         // instrument list
@@ -112,6 +156,7 @@ namespace Mixer {
         }
 
 #region regInstrumentControl
+
         private string testLocation(string location, int index) {
 //            TODO: rewrite test logic (make factory?)
 #if mock
@@ -121,6 +166,10 @@ namespace Mixer {
             return lst[index];
 #else
             try {
+//                using (var inst = new NationalInstruments.VisaNS.GpibSession(location)))
+//                {
+//                    
+//                }
                 using (var instrument = new AgSCPI99(location)) {
                     instrument.Transport.Query.Invoke("*IDN?", out var answer);
                     return answer;
@@ -163,11 +212,12 @@ namespace Mixer {
                 // TODO: query dummy instrument
                 // TODO: make a factory, which queries the ports through a dummy instrument and creates and returns and appropriate instrument instance?
                 string idn = testLocation(location, i); 
+//                string idn = "Agilent Technoligies,N9030A,MY49432146,A.11.04";
                 if (!string.IsNullOrEmpty(idn)) {
                     string name = idn.Split(',')[1];
                     listInstruments.Add(instrumentRegistry[name.Trim()](location, idn));
+                    log("found " + idn + " at " + location, false);
                 }
-                log("found " + idn + " at " + location, false);
                 prog?.Report((double)i / maxPort * 100);
 #if mock
                 if (listInstruments.Count == 3) {
@@ -189,7 +239,7 @@ namespace Mixer {
             log("search done, found " + listInstruments.Count + " device(s)", false);
         }
 
-        private bool instPrepareAnalyzer(Analyzer SA) {
+        private bool instPrepareAnalyzer(IAnalyzer SA) {
             try {
                 SA.SetAutocalibration(Analyzer.AutocalState.AutocalOff);
                 SA.SetFreqSpan(span);
@@ -207,7 +257,7 @@ namespace Mixer {
             return true;
         }
 
-        private bool instPrepareGenerator(Generator GEN) {
+        private bool instPrepareGenerator(IGenerator GEN) {
             try {
                 GEN.SetOutputModulation(Generator.OutputModulationState.ModulationOff);
                 GEN.SetOutput(Generator.OutputState.OutputOn);
@@ -222,6 +272,7 @@ namespace Mixer {
             return true;
         }
 
+        // TODO: convert to interface IGenerator/IAkip
         private bool instPrepareAkip(Akip3407 GEN) {
             try {
                 // TODO: setload -> 50ohm, then set ampunit = dbm
@@ -246,19 +297,19 @@ namespace Mixer {
             return true;
         }
 
-        private bool instPrepareForCalib(Generator GEN, Analyzer SA) {
+        private bool instPrepareForCalib(IGenerator GEN, IAnalyzer SA) {
             return instPrepareAnalyzer(SA) && instPrepareGenerator(GEN);
         }
-
-        private bool instPrepareForMeas(Generator GEN, Analyzer SA, Generator LO) {
+        
+        private bool instPrepareForMeas(IGenerator GEN, IAnalyzer SA, IGenerator LO) {
             return instPrepareForCalib(GEN, SA) && instPrepareGenerator(LO);
         }
 
-        private bool instPrepareForMeasSSBUp(Akip3407 GEN, Analyzer SA, Generator LO) {
+        private bool instPrepareForMeasSSBUp(Akip3407 GEN, IAnalyzer SA, IGenerator LO) {
             return instPrepareAkip(GEN) && instPrepareAnalyzer(SA) && instPrepareGenerator(LO);
         }
 
-        private bool instReleaseGen(Generator GEN) {
+        private bool instReleaseGen(IGenerator GEN) {
             try {
                 GEN.SetOutput(Generator.OutputState.OutputOff);
             }
@@ -269,7 +320,7 @@ namespace Mixer {
             return true;
         }
 
-        private bool instReleaseAnalyzer(Analyzer SA) {
+        private bool instReleaseAnalyzer(IAnalyzer SA) {
             try {
                 SA.SetAutocalibration(Analyzer.AutocalState.AutocalOn);
             }
@@ -294,7 +345,7 @@ namespace Mixer {
             return true;
         }
 
-        private bool instReleaseFromCalib(Generator GEN, Analyzer SA) {
+        private bool instReleaseFromCalib(IGenerator GEN, IAnalyzer SA) {
             if (!instReleaseGen(GEN))
                 return false;
             if (!instReleaseAnalyzer(SA))
@@ -304,7 +355,7 @@ namespace Mixer {
             return true;
         }
 
-        private bool instReleaseFromMeas(Generator GEN, Analyzer SA, Generator LO) {
+        private bool instReleaseFromMeas(IGenerator GEN, IAnalyzer SA, IGenerator LO) {
             if (!instReleaseGen(GEN))
                 return false;
             if (!instReleaseAnalyzer(SA))
@@ -317,7 +368,7 @@ namespace Mixer {
         }
 
         // TODO: rename this method
-        private bool instSetAnalyzerCenterFreq(Analyzer SA, decimal freq) {
+        private bool instSetAnalyzerCenterFreq(IAnalyzer SA, decimal freq) {
             try {
                 SA.SetMeasCenterFreq(freq);
                 SA.SetMarker1XCenter(freq);
@@ -330,7 +381,7 @@ namespace Mixer {
         }
 
         // TODO: rename this method
-        private bool instSetCalibFreq(Generator GEN, Analyzer SA, decimal freq) {
+        private bool instSetCalibFreq(IGenerator GEN, IAnalyzer SA, decimal freq) {
             if (!instSetAnalyzerCenterFreq(SA, freq))
                 return false;
             try {
@@ -345,7 +396,7 @@ namespace Mixer {
             return true;
         }
 
-        private bool instSetGenPow(Generator GEN, string pow) {
+        private bool instSetGenPow(IGenerator GEN, string pow) {
             try {
                 GEN.SetSourcePow(pow);
             }
@@ -358,11 +409,11 @@ namespace Mixer {
             return true;
         }
 
-        private bool instSetGenPow(Generator GEN, decimal pow) {
+        private bool instSetGenPow(IGenerator GEN, decimal pow) {
             return instSetGenPow(GEN, pow.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture));
         }
 
-        private bool instSetGenFreq(Generator GEN, string freq) {
+        private bool instSetGenFreq(IGenerator GEN, string freq) {
             try {
                 GEN.SetSourceFreq(freq);
             }
@@ -375,11 +426,11 @@ namespace Mixer {
             return true;
         }
 
-        private bool instSetGenFreq(Generator GEN, decimal freq) {
+        private bool instSetGenFreq(IGenerator GEN, decimal freq) {
             return instSetGenFreq(GEN, freq.ToString(Constants.decimalFormat, CultureInfo.InvariantCulture));
         }
 
-        private bool instSetGenFreqPow(Generator GEN, decimal freq, string pow) {
+        private bool instSetGenFreqPow(IGenerator GEN, decimal freq, string pow) {
             if (!instSetGenFreq(GEN, freq) || !instSetGenPow(GEN, pow)) {
                 log("error: measure fail, skipping row", false);
                 return false;
@@ -388,7 +439,7 @@ namespace Mixer {
             return true;
         }
 
-        private decimal readPower(Analyzer SA) {
+        private decimal readPower(IAnalyzer SA) {
             // this function should always return correct decimal number, error handling is not necessary
             string readpow;
             try {
@@ -413,7 +464,7 @@ namespace Mixer {
 
 #region regCalibrations
 
-        public void calibrate(Generator GEN, Analyzer SA, IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
+        public void calibrate(IGenerator GEN, IAnalyzer SA, IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
 
             // local helper fuction
             bool convertStrValues(string inFreqStr, string inPowGoalStr, out decimal inFreqDec, out decimal inPowGoalDec) {
@@ -499,15 +550,16 @@ namespace Mixer {
             prog?.Report(100);
         }
 
+        // TODO: remove type conversions?
         public void calibrateIn(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
-            calibrate((Generator)_gen, (Analyzer)_sa, prog, data, paramDict, token);
+            calibrate((IGenerator)_gen, (IAnalyzer)_sa, prog, data, paramDict, token);
         }
 
         public void calibrateLo(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
-            calibrate((Generator)_lo, (Analyzer)_sa, prog, data, paramDict, token);
+            calibrate((IGenerator)_lo, (IAnalyzer)_sa, prog, data, paramDict, token);
         }
 
-        private string getAttenuationError(Generator GEN, Analyzer SA, string freq, decimal powGoal, int harmonic = 1) {
+        private string getAttenuationError(IGenerator GEN, IAnalyzer SA, string freq, decimal powGoal, int harmonic = 1) {
             if (string.IsNullOrEmpty(freq) || freq == "-") {
                 return "-";
             }
@@ -540,8 +592,8 @@ namespace Mixer {
 
         public void calibrateOut(IProgress<double> prog, DataTable data, List<Tuple<string, string>> parameters, MeasureMode mode, CancellationToken token) {
             // TODO: fail whole row on any error
-            var GEN = (Generator)_gen;
-            var SA = (Analyzer)_sa;
+            var GEN = (IGenerator)_gen;
+            var SA = (IAnalyzer)_sa;
 
             instPrepareForCalib(GEN, SA);
 
@@ -585,7 +637,7 @@ namespace Mixer {
 
 #region regMeasurement
 
-        public void measurePower(DataRow row, Analyzer SA, decimal powGoal, decimal freq, string colAtt, string colPow, string colConv, int coeff, int db3) {
+        public void measurePower(DataRow row, IAnalyzer SA, decimal powGoal, decimal freq, string colAtt, string colPow, string colConv, int coeff, int db3) {
             string attStr = row[colAtt].ToString().Replace(',', '.');
 
             if (string.IsNullOrEmpty(attStr) || attStr == "-") {
@@ -621,13 +673,13 @@ namespace Mixer {
         }
 
         public void measure_mix_DSB_down(IProgress<double> prog, DataTable data, CancellationToken token) {
-            if (!instPrepareForMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo))
+            if (!instPrepareForMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo))
                 return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    instReleaseFromMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo);
+                    instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
                     log("error: task aborted", false);
                     return;
                 }
@@ -651,8 +703,8 @@ namespace Mixer {
                 inFreqRFDec *= Constants.GHz;
                 inFreqIFDec *= Constants.GHz;
 
-                if (!instSetGenFreqPow((Generator)_gen, inFreqRFDec, inPowRF) ||
-                    !instSetGenFreqPow((Generator)_lo, inFreqLODec, inPowLO)) {
+                if (!instSetGenFreqPow((IGenerator)_gen, inFreqRFDec, inPowRF) ||
+                    !instSetGenFreqPow((IGenerator)_lo, inFreqLODec, inPowLO)) {
                     // TODO: fix this crap
                     row["POUT-IF"] = "-"; row["CONV"]   = "-";
                     row["POUT-RF"] = "-"; row["ISO-RF"] = "-";
@@ -661,26 +713,26 @@ namespace Mixer {
                 }
 
                 // TODO: remove code dupe
-                measurePower(row, (Analyzer)_sa, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
-                measurePower(row, (Analyzer)_sa, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
-                measurePower(row, (Analyzer)_sa, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowRFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV", -1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowRFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "ISO-RF", 1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
 
-            instReleaseFromMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo);
+            instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
             prog?.Report(100);
         }
 
         public void measure_mix_DSB_up(IProgress<double> prog, DataTable data, CancellationToken token) {
-            if (!instPrepareForMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo))
+            if (!instPrepareForMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo))
                 return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    instReleaseFromMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo);
+                    instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
                     log("error: task aborted", false);
                     return;
                 }
@@ -703,34 +755,34 @@ namespace Mixer {
                 inFreqRFDec *= Constants.GHz;
                 inFreqLODec *= Constants.GHz;
 
-                if (!instSetGenFreqPow((Generator)_gen, inFreqIFDec, inPowIF) ||
-                    !instSetGenFreqPow((Generator)_lo, inFreqLODec, inPowLO)) {
+                if (!instSetGenFreqPow((IGenerator)_gen, inFreqIFDec, inPowIF) ||
+                    !instSetGenFreqPow((IGenerator)_lo, inFreqLODec, inPowLO)) {
                     row["POUT-RF"] = "-"; row["CONV"]   = "-";
                     row["POUT-IF"] = "-"; row["ISO-IF"] = "-";
                     row["POUT-LO"] = "-"; row["ISO-LO"] = "-";
                     continue;
                 }
 
-                measurePower(row, (Analyzer)_sa, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1, 0);
-                measurePower(row, (Analyzer)_sa, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1, 0);
-                measurePower(row, (Analyzer)_sa, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowIFGoalDec, inFreqRFDec, "ATT-RF", "POUT-RF", "CONV", -1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowIFGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "ISO-IF", 1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
 
-            instReleaseFromMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo);
+            instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
             prog?.Report(100);
         }
 
         public void measure_mix_SSB_down(IProgress<double> prog, DataTable data, CancellationToken token) {
-            if (!instPrepareForMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo))
+            if (!instPrepareForMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo))
                 return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    instReleaseFromMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo);
+                    instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
                     log("error: task aborted", false);
                     return;
                 }
@@ -757,7 +809,7 @@ namespace Mixer {
                 inFreqLSBDec *= Constants.GHz;
                 inFreqUSBDec *= Constants.GHz;
 
-                if (!instSetGenFreqPow((Generator)_lo, inFreqLODec, inPowLOStr)) {
+                if (!instSetGenFreqPow((IGenerator)_lo, inFreqLODec, inPowLOStr)) {
                     row["POUT-LO"]  = "-"; row["ISO-LO"]   = "-";
                     row["POUT-IF"]  = "-"; row["CONV-LSB"] = "-";
                     row["POUT-LSB"] = "-"; row["ISO-LSB"]  = "-";
@@ -766,9 +818,9 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, (Analyzer)_sa, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowLOGoalDec, inFreqLODec, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
-                if (!instSetGenFreqPow((Generator)_gen, inFreqLSBDec, inPowLSBStr)) {
+                if (!instSetGenFreqPow((IGenerator)_gen, inFreqLSBDec, inPowLSBStr)) {
                     row["POUT-LO"]  = "-"; row["ISO-LO"]   = "-";
                     row["POUT-IF"]  = "-"; row["CONV-LSB"] = "-";
                     row["POUT-LSB"] = "-"; row["ISO-LSB"]  = "-";
@@ -777,10 +829,10 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, (Analyzer)_sa, inPowLSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-LSB", -1, -3);
-                measurePower(row, (Analyzer)_sa, inPowLSBGoalDec, inFreqLSBDec, "ATT-LSB", "POUT-LSB", "ISO-LSB", 1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowLSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-LSB", -1, -3);
+                measurePower(row, (IAnalyzer)_sa, inPowLSBGoalDec, inFreqLSBDec, "ATT-LSB", "POUT-LSB", "ISO-LSB", 1, 0);
 
-                if (!instSetGenFreqPow((Generator)_gen, inFreqUSBDec, inPowUSBStr)) {
+                if (!instSetGenFreqPow((IGenerator)_gen, inFreqUSBDec, inPowUSBStr)) {
                     row["POUT-LO"]  = "-"; row["ISO-LO"]   = "-";
                     row["POUT-IF"]  = "-"; row["CONV-LSB"] = "-";
                     row["POUT-LSB"] = "-"; row["ISO-LSB"]  = "-";
@@ -789,25 +841,26 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, (Analyzer)_sa, inPowUSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-USB", -1, -3);
-                measurePower(row, (Analyzer)_sa, inPowUSBGoalDec, inFreqUSBDec, "ATT-USB", "POUT-USB", "ISO-USB", 1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowUSBGoalDec, inFreqIFDec, "ATT-IF", "POUT-IF", "CONV-USB", -1, -3);
+                measurePower(row, (IAnalyzer)_sa, inPowUSBGoalDec, inFreqUSBDec, "ATT-USB", "POUT-USB", "ISO-USB", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
 
-            instReleaseFromMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo);
+            instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
             prog?.Report(100);
         }
 
         public void measure_mix_SSB_up(IProgress<double> prog, DataTable data, CancellationToken token) {
-            if (!instPrepareForMeasSSBUp((Akip3407)_gen, (Analyzer)_sa, (Generator)_lo))
+            if (!instPrepareForMeasSSBUp((Akip3407)_gen, (IAnalyzer)_sa, (IGenerator)_lo))
                 return;
+            // TODO: implement masurement when akip is fixed
             // TODO: check span for akip: span <= fif, false -> make span = fif
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    instReleaseFromMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo);
+                    instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
                     log("error: task aborted", false);
                     return;
                 }
@@ -831,7 +884,7 @@ namespace Mixer {
                 inFreqUSB *= Constants.GHz;
                 inFreqIF *= Constants.GHz;
 
-                if (!instSetGenFreqPow((Generator)_lo, inFreqLO, inPowLOStr)) { //akip -> set cha1: fif pif phif1=0, cha2: fif pif phif2=table
+                if (!instSetGenFreqPow((IGenerator)_lo, inFreqLO, inPowLOStr)) { //akip -> set cha1: fif pif phif1=0, cha2: fif pif phif2=table
                     row["POUT-LSB"] = "-"; row["CONV-LSB"] = "-";
                     row["POUT-USB"] = "-"; row["CONV-USB"] = "-";
                     row["POUT-IF"]  = "-"; row["ISO-IF"]   = "-";
@@ -839,27 +892,27 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, (Analyzer)_sa, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
-                measurePower(row, (Analyzer)_sa, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
-                measurePower(row, (Analyzer)_sa, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
-                measurePower(row, (Analyzer)_sa, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
+                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
+                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
+                measurePower(row, (IAnalyzer)_sa, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
 
-            instReleaseFromMeas((Generator)_gen, (Analyzer)_sa, (Generator)_lo);
+            instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
             prog?.Report(100);
         }
 
         public void measure_mult(IProgress<double> prog, DataTable data, CancellationToken token) {
-            if (!instPrepareForCalib((Generator)_gen, (Analyzer)_sa))
+            if (!instPrepareForCalib((IGenerator)_gen, (IAnalyzer)_sa))
                 return;
 
             int i = 0;
             foreach (DataRow row in data.Rows) {
                 if (token.IsCancellationRequested) {
-                    instReleaseFromCalib((Generator)_gen, (Analyzer)_sa);
+                    instReleaseFromCalib((IGenerator)_gen, (IAnalyzer)_sa);
                     log("error: task aborted", false);
                     return;
                 }
@@ -876,7 +929,7 @@ namespace Mixer {
                 decimal.TryParse(row["FH1"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqH1);
                 inFreqH1 *= Constants.GHz;
 
-                if (!instSetGenFreqPow((Generator)_gen, inFreqH1, inPowGenStr)) {
+                if (!instSetGenFreqPow((IGenerator)_gen, inFreqH1, inPowGenStr)) {
                     row["POUT-H1"] = "-"; row["CONV-H1"] = "-";
                     row["POUT-H2"] = "-"; row["CONV-H2"] = "-";
                     row["POUT-H3"] = "-"; row["CONV-H3"] = "-";
@@ -884,16 +937,16 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, (Analyzer)_sa, inPowGoal, inFreqH1 * 1, "ATT-H1", "POUT-H1", "CONV-H1", -1, 0);
-                measurePower(row, (Analyzer)_sa, inPowGoal, inFreqH1 * 2, "ATT-H2", "POUT-H2", "CONV-H2", -1, 0);
-                measurePower(row, (Analyzer)_sa, inPowGoal, inFreqH1 * 3, "ATT-H3", "POUT-H3", "CONV-H3", -1, 0);
-                measurePower(row, (Analyzer)_sa, inPowGoal, inFreqH1 * 4, "ATT-H4", "POUT-H4", "CONV-H4", -1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowGoal, inFreqH1 * 1, "ATT-H1", "POUT-H1", "CONV-H1", -1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowGoal, inFreqH1 * 2, "ATT-H2", "POUT-H2", "CONV-H2", -1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowGoal, inFreqH1 * 3, "ATT-H3", "POUT-H3", "CONV-H3", -1, 0);
+                measurePower(row, (IAnalyzer)_sa, inPowGoal, inFreqH1 * 4, "ATT-H4", "POUT-H4", "CONV-H4", -1, 0);
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;
             }
 
-            instReleaseFromCalib((Generator)_gen, (Analyzer)_sa);
+            instReleaseFromCalib((IGenerator)_gen, (IAnalyzer)_sa);
             prog?.Report(100);
         }
 

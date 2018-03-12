@@ -3,7 +3,7 @@ using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
 namespace Mixer
 {
-    class Analyzer : Instrument {
+    class Analyzer : Instrument, IAnalyzer {
 
         public struct AutocalState {
             public const string AutocalOff = "OFF";
@@ -15,6 +15,10 @@ namespace Mixer
         }
 
         private AgSCPI99 _instrument;
+
+        public Analyzer() {
+            // Empty ctor for mocking only!
+        }
 
         public Analyzer(string location, string fullname) {
             Location = location;
@@ -29,19 +33,19 @@ namespace Mixer
             }
         }
 
-        public Analyzer(string location) {
-            throw new NotImplementedException();
-        }
-
-        public override string query(string question) {
+        protected virtual string query(string question) {
             _instrument.Transport.Query.Invoke(question, out var ans);
             return ans;
         }
 
-        public override string send(string command) {
+        protected virtual string send(string command) {
             _instrument.Transport.Command.Invoke(command);
             return "analyzer command success";
         }
+
+        public override string RawQuery(string question) => query(question);
+
+        public override string RawCommand(string command) => send(command);
 
         // TODO: make properties?
         public string SetAutocalibration(string state) => send(":CAL:AUTO " + state);

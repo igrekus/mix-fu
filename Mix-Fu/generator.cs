@@ -3,7 +3,7 @@ using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
 namespace Mixer
 {
-    internal class Generator : Instrument {
+    internal class Generator : Instrument, IGenerator {
 
         public struct OutputModulationState {
             public const string ModulationOff = "OFF";
@@ -16,6 +16,10 @@ namespace Mixer
         }
 
         private AgSCPI99 _instrument;
+
+        public Generator() {
+            // Empty ctor for mocking only!
+        }
 
         public Generator(string location, string fullname) {
             Location = location;
@@ -30,23 +34,23 @@ namespace Mixer
             }
         }
 
-        public Generator(string location) {
-            throw new NotImplementedException();
-        }
-
-        public override string query(string question) {
+        protected virtual string query(string question) {
             _instrument.Transport.Query.Invoke(question, out var ans);
             return ans;
         }
 
-        public override string send(string command) {
+        protected virtual string send(string command) {
             _instrument.Transport.Command.Invoke(command);
             return "generator command success";
         }
 
+        public override string RawQuery(string question) => query(question);
+
+        public override string RawCommand(string command) => send(command);
+
         public string SetOutput(string state) => send("OUTP:STAT " + state);
 
-        public string SetOutputModulation(string state) => send(":OUTP:MOD:STAT " + state);
+        public virtual string SetOutputModulation(string state) => send(":OUTP:MOD:STAT " + state);
 
         public string SetSourceFreq(decimal freq) => send("SOUR:FREQ " + freq);
 

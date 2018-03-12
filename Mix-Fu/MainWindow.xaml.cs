@@ -26,29 +26,6 @@ namespace Mixer {
         modeSSBDown,
         modeSSBUp,
         modeMultiplier
-    };
-
-    interface IInstrument {
-        string Location { get; set; }
-        string Name     { get; set; }
-        string FullName { get; set; }
-        string query(string question);
-        string send(string command);
-    }
-
-    abstract class Instrument : IInstrument {
-        public string Location { get; set; }
-        public string Name { get; set; }
-        public string FullName { get; set; }
-
-        public abstract string query(string question);
-        public abstract string send(string command);
-
-        public override string ToString() {
-            return base.ToString() + ": " + "loc: " + Location +
-                   " _name:"       + Name +
-                   " fname:"       + FullName;
-        }
     }
     
     public partial class MainWindow : Window {
@@ -184,23 +161,29 @@ namespace Mixer {
 
         // comboboxes
         private void comboIN_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager._gen = (IInstrument)((ComboBox)sender).SelectedItem;
-            if (instrumentManager._gen != null) {
-                log(instrumentManager._gen.ToString(), true);
+            try {
+                instrumentManager._gen = (Instrument)((ComboBox)sender).SelectedItem;
+            }
+            catch (Exception ex) {
+                log("error: IN must be a Generator");
             }
         }
 
         private void comboOUT_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager._sa = (IInstrument)((ComboBox)sender).SelectedItem;
-            if (instrumentManager._gen != null) {
-                log(instrumentManager._sa.ToString(), true);
+            try {
+                instrumentManager._sa = (Instrument)((ComboBox)sender).SelectedItem;
+            }
+            catch (Exception ex) {
+                log("error: OUT must be an Analyzer");
             }
         }
 
         private void comboLO_SelectionChanged(object sender, SelectionChangedEventArgs e) {
-            instrumentManager._lo = (IInstrument)((ComboBox)sender).SelectedItem;
-            if (instrumentManager._gen != null) {
-                log(instrumentManager._lo.ToString(), true);
+            try {
+                instrumentManager._lo = (Instrument)((ComboBox)sender).SelectedItem;
+            }
+            catch (Exception ex) {
+                log("error: LO must be a Generator");
             }
         }
 
@@ -221,15 +204,13 @@ namespace Mixer {
 
             instrumentManager.listInstruments.Clear();
 
-            try
-            {
+            try {
                 var progress = progressHandler as IProgress<double>;
-                searchTask = Task.Run(() => instrumentManager.searchInstruments(progress, maxPort, gpib, token), token);
+                searchTask   = Task.Run(() => instrumentManager.searchInstruments(progress, maxPort, gpib, token), token);
                 await searchTask;
             }
-            catch (Exception ex)
-            {
-                log(ex.Message, false);
+            catch (Exception ex) {
+                log(ex.Message);
             }
 
             comboIN.Items.Refresh();
@@ -260,8 +241,8 @@ namespace Mixer {
                 return;
             string question = textBox_query.Text;
             log(">>> query: " + question);
-            var result = instrumentManager._sa.query(question);
-            log("> " + result);
+            var inst = (Instrument)comboOUT.SelectedItem;
+            log("> " + inst.RawQuery(question));
         }
 
         private void btnRunCommandClicked(object sender, RoutedEventArgs e) {
@@ -269,8 +250,8 @@ namespace Mixer {
                 return;
             string command = textBox_query.Text;
             log(">>> command: " + command);
-            var result = instrumentManager._sa.send(command);
-            log("> " + result);
+            var inst = (Instrument)comboOUT.SelectedItem;
+            log("> " + inst.RawCommand(command));
         }
 
         // data buttons
@@ -466,11 +447,11 @@ namespace Mixer {
                 log("error: no OUT instrument selected");
                 return false;
             }
-            if (comboIN.SelectedItem.GetType() != typeof(Generator)) {
+            if (!(instrumentManager._gen is IGenerator)) {
                 log("error: IN instrument must be a Generator");
                 return false;
             }
-            if (comboOUT.SelectedItem.GetType() != typeof(Analyzer)) {
+            if (!(instrumentManager._sa is IAnalyzer)) {
                 log("error: OUT instrument must be an Analyzer");
                 return false;
             }
@@ -494,11 +475,11 @@ namespace Mixer {
                 log("error: no OUT instrument selected");
                 return false;
             }
-            if (comboLO.SelectedItem.GetType() != typeof(Generator)) {
+            if (!(instrumentManager._lo is IGenerator)) {
                 log("error: LO instrument must be a Generator");
                 return false;
             }
-            if (comboOUT.SelectedItem.GetType() != typeof(Analyzer)) {
+            if (!(instrumentManager._sa is IAnalyzer)) {
                 log("error: OUT instrument must be an Analyzer");
                 return false;
             }
@@ -560,25 +541,24 @@ namespace Mixer {
                 log("error: no LO instrument selected");
                 return false;
             }
-
             if (mode != MeasureMode.modeSSBUp) {
-                if (comboIN.SelectedItem.GetType() != typeof(Generator)) {
+                if (!(instrumentManager._gen is IGenerator)) { 
                     log("error: IN instrument must be a Generator");
                     return false;
                 }
             }
             else {
-                if (comboIN.SelectedItem.GetType() != typeof(Akip3407)) {
+                // TODO: akip check
+                if (!(instrumentManager._gen is IGenerator)) { 
                     log("error: IN unstrument must be АКИП-3407");
                     return false;
                 }
             }
-
-            if (comboOUT.SelectedItem.GetType() != typeof(Analyzer)) {
+            if (!(instrumentManager._sa is IAnalyzer)) {
                 log("error: OUT instrument must be an Analyzer");
                 return false;
             }
-            if (comboLO.SelectedItem.GetType() != typeof(Generator)) {
+            if (!(instrumentManager._lo is IGenerator)) {
                 log("error: LO instrument must be a Generator");
                 return false;
             }
