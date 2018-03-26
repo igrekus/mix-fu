@@ -1,11 +1,10 @@
-#define mock
+//#define mock
 
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Threading;
-using Agilent.CommandExpert.ScpiNet.AgMXG_A_01_80;
 using NationalInstruments.VisaNS;
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
@@ -82,7 +81,7 @@ namespace Mixer {
                                                                        { "E4438C",    (loc, idn) => new Generator(loc, idn) },
                                                                        { "N5181B",    (loc, idn) => new Generator(loc, idn) },
                                                                        { "N5183A",    (loc, idn) => new Generator(loc, idn) },
-                                                                       { "HMC-T2100", (loc, idn) => new HMC_T2100(loc, idn) },
+                                                                       { "HMC-T2100", (loc, idn) => new HMCT2100(loc, idn) },
                                                                        { "AKIP",      (loc, idn) => new Akip3407 (loc, idn) } };
 #endif
 
