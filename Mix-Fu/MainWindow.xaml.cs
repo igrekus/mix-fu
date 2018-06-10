@@ -365,7 +365,7 @@ namespace Mixer {
 
         private void btnCancelMeasureClicked(object sender, RoutedEventArgs e) {
             if (!measureTask?.IsCompleted == true) {
-                measureTokenSource.Cancel();
+                measureTokenSource?.Cancel();
             }
         }
         // main window closed
@@ -423,7 +423,7 @@ namespace Mixer {
                     var wsRow = ws.Cells[rowNum, 1, rowNum, ws.Dimension.End.Column];
                     DataRow row = dataTable.Rows.Add();
                     foreach (var cell in wsRow) {
-                        row[cell.Start.Column - 1] = cell.Value.ToString().Replace(".", ",");
+                        row[cell.Start.Column - 1] = cell.Value?.ToString().Replace(".", ",");
                     }
                 } 
                 return dataTable;

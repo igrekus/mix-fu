@@ -225,10 +225,11 @@ namespace Mixer {
 #endif
             }
 
-            string akp = testAkip(akip_address);
-            if (!string.IsNullOrEmpty(akp)) {
-                listInstruments.Add(instrumentRegistry["AKIP"](akip_address, "AKIP,AKIP-3407,s/n 11111"));
-            }
+            // TODO: uncomment when adding AKIP functionality
+//            string akp = testAkip(akip_address);
+//            if (!string.IsNullOrEmpty(akp)) {
+//                listInstruments.Add(instrumentRegistry["AKIP"](akip_address, "AKIP,AKIP-3407,s/n 11111"));
+//            }
 
             prog?.Report(100);
             if (listInstruments.Count == 0) {
@@ -258,7 +259,8 @@ namespace Mixer {
 
         private bool instPrepareGenerator(IGenerator GEN) {
             try {
-                GEN.SetOutputModulation(Generator.OutputModulationState.ModulationOff);
+                // TODO: doesn't work for N5183A, check modulation off command for all gens
+//                GEN.SetOutputModulation(Generator.OutputModulationState.ModulationOff);
                 GEN.SetOutput(Generator.OutputState.OutputOn);
             }
             catch (Exception ex) {
