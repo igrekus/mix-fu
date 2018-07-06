@@ -37,6 +37,8 @@ namespace Mixer {
     // TODO: make general interface functions
     interface IAnalyzer {
         string SetAutocalibration(string state);
+        string SetMWPreselectorPath(string state);
+        string SetInternalPreampState(string state);
         string SetFreqSpan(decimal span);
         string SetMarkerMode(string mode);
         string SetPowerAttenuation(decimal att);
@@ -144,6 +146,7 @@ namespace Mixer {
             };
             outParameters.Add(MeasureMode.modeSSBDown, ssbdownup);
             outParameters.Add(MeasureMode.modeSSBUp, ssbdownup);
+            outParameters.Add(MeasureMode.modeSSBUpManual, ssbdownup);
 
             var multiplier = new List<Tuple<string, string>> {
                 new Tuple<string, string>("FH1", "ATT-H1"),
@@ -242,6 +245,8 @@ namespace Mixer {
         private bool instPrepareAnalyzer(IAnalyzer SA) {
             try {
                 SA.SetAutocalibration(Analyzer.AutocalState.AutocalOff);
+                SA.SetMWPreselectorPath(Analyzer.MWPreselectorPath.PathMPB);
+                SA.SetInternalPreampState(Analyzer.InternalPreampState.InternalPreampOff);
                 SA.SetFreqSpan(span);
                 SA.SetMarkerMode(Analyzer.MarkerMode.ModePos);
                 SA.SetPowerAttenuation(attenuation);
@@ -308,6 +313,10 @@ namespace Mixer {
 
         private bool instPrepareForMeasSSBUp(Akip3407 GEN, IAnalyzer SA, IGenerator LO) {
             return instPrepareAkip(GEN) && instPrepareAnalyzer(SA) && instPrepareGenerator(LO);
+        }
+
+        private bool instPrepareForMeasSSBUpManual(IAnalyzer SA, IGenerator LO) {
+            return instPrepareAnalyzer(SA) && instPrepareGenerator(LO);
         }
 
         private bool instReleaseGen(IGenerator GEN) {
@@ -592,46 +601,54 @@ namespace Mixer {
         }
 
         public void calibrateOut(IProgress<double> prog, DataTable data, List<Tuple<string, string>> parameters, MeasureMode mode, CancellationToken token) {
-            // TODO: fail whole row on any error
-            var GEN = (IGenerator)_gen;
-            var SA = (IAnalyzer)_sa;
+            try {
+                // TODO: fail whole row on any error
+                var GEN = (IGenerator)_gen;
+                var SA  = (IAnalyzer)_sa;
 
-            instPrepareForCalib(GEN, SA);
+                instPrepareForCalib(GEN, SA);
 
-            const decimal tempPow = (decimal)-20.00;
-            if (!instSetGenPow(GEN, tempPow))
-                return;
+                const decimal tempPow = (decimal)-20.00;
 
-            var cache = new Dictionary<string, string>();
-
-            int i = 0;
-            foreach (DataRow row in data.Rows) {
-                if (token.IsCancellationRequested) {
-                    log("error: task aborted", false);
-                    instReleaseFromCalib(GEN, SA);
+                if (!instSetGenPow(GEN, tempPow))
                     return;
-                }
 
-                int harmonic = 1;   // hack
+                var cache = new Dictionary<string, string>();
 
-                foreach (var p in parameters) {
-                    string freq = row[p.Item1].ToString();
+                int i = 0;
+                foreach (DataRow row in data.Rows) {
+                    if (token.IsCancellationRequested) {
+                        log("error: task aborted", false);
+                        instReleaseFromCalib(GEN, SA);
 
-                    if (!cache.ContainsKey(freq)) {
-                        cache.Add(freq, getAttenuationError(GEN, SA, row[p.Item1].ToString(), tempPow, harmonic));
+                        return;
                     }
 
-                    row[p.Item2] = cache[freq];
+                    int harmonic = 1; // hack
 
-                    if (mode == MeasureMode.modeMultiplier)
-                        ++harmonic;
+                    foreach (var p in parameters) {
+                        string freq = row[p.Item1].ToString();
+
+                        if (!cache.ContainsKey(freq)) {
+                            cache.Add(freq, getAttenuationError(GEN, SA, row[p.Item1].ToString(), tempPow, harmonic));
+                        }
+
+                        row[p.Item2] = cache[freq];
+
+                        if (mode == MeasureMode.modeMultiplier)
+                            ++harmonic;
+                    }
+
+                    prog?.Report((double)i / data.Rows.Count * 100);
+                    ++i;
                 }
 
-                prog?.Report((double)i / data.Rows.Count * 100);
-                ++i;
+                instReleaseFromCalib(GEN, SA);
+                prog?.Report(100);
             }
-            instReleaseFromCalib(GEN, SA);
-            prog?.Report(100);
+            catch (Exception ex) {
+                log(ex.Message, false);
+            }
         }
 
 #endregion regCalibrations
@@ -890,6 +907,59 @@ namespace Mixer {
                     row["POUT-USB"] = "-"; row["CONV-USB"] = "-";
                     row["POUT-IF"]  = "-"; row["ISO-IF"]   = "-";
                     row["POUT-LO"]  = "-"; row["ISO-LO"]   = "-";
+                    continue;
+                }
+
+                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
+                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
+                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
+                measurePower(row, (IAnalyzer)_sa, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+
+                prog?.Report((double)i / data.Rows.Count * 100);
+                ++i;
+            }
+
+            instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
+            prog?.Report(100);
+        }
+
+        public void measure_mix_SSB_up_manual(IProgress<double> prog, DataTable data, CancellationToken token) {
+            if (!instPrepareForMeasSSBUpManual((IAnalyzer)_sa, (IGenerator)_lo))
+                return;
+            // TODO: implement masurement when akip is fixed
+            // TODO: check span for akip: span <= fif, false -> make span = fif
+            int i = 0;
+            foreach (DataRow row in data.Rows) {
+                if (token.IsCancellationRequested) {
+                    instReleaseFromMeas((IGenerator)_gen, (IAnalyzer)_sa, (IGenerator)_lo);
+                    log("error: task aborted", false);
+                    return;
+                }
+
+                string inPowLOStr = row["PLO"].ToString().Replace(',', '.');
+                string inPowIFStr = row["PIF"].ToString().Replace(',', '.');
+                if (string.IsNullOrEmpty(inPowLOStr) || inPowLOStr == "-" ||
+                    string.IsNullOrEmpty(inPowIFStr) || inPowIFStr == "-") {
+                    log("warning: empty row, skipping", false);
+                    continue;
+                }
+
+                decimal.TryParse(row["PIF-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowIFGoal);
+                decimal.TryParse(row["PLO-GOAL"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inPowLOGoal);
+                decimal.TryParse(row["FLO"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqLO);
+                decimal.TryParse(row["FLSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqLSB);
+                decimal.TryParse(row["FUSB"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqUSB);
+                decimal.TryParse(row["FIF"].ToString().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out var inFreqIF);
+                inFreqLO *= Constants.GHz;
+                inFreqLSB *= Constants.GHz;
+                inFreqUSB *= Constants.GHz;
+                inFreqIF *= Constants.GHz;
+
+                if (!instSetGenFreqPow((IGenerator)_lo, inFreqLO, inPowLOStr)) { //akip -> set cha1: fif pif phif1=0, cha2: fif pif phif2=table
+                    row["POUT-LSB"] = "-"; row["CONV-LSB"] = "-";
+                    row["POUT-USB"] = "-"; row["CONV-USB"] = "-";
+                    row["POUT-IF"] = "-"; row["ISO-IF"] = "-";
+                    row["POUT-LO"] = "-"; row["ISO-LO"] = "-";
                     continue;
                 }
 

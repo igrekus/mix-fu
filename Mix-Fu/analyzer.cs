@@ -10,6 +10,16 @@ namespace Mixer
             public const string AutocalOn = "ON";
         }
 
+        public struct MWPreselectorPath{
+            public const string PathMPB = "MPB";
+            public const string PathSTD = "STD";
+        }
+
+        public struct InternalPreampState {
+            public const string InternalPreampOff = "OFF";
+            public const string InternalPreampOn = "ON";
+        }
+
         public struct MarkerMode {
             public const string ModePos = "POS";
         }
@@ -51,6 +61,11 @@ namespace Mixer
         public string SetAutocalibration(string state) => send(":CAL:AUTO " + state);
 
         public string SetFreqSpan(decimal span) => send(":SENS:FREQ:SPAN " + span);
+
+//        public string SetMWPreselectorPath(string state) => send(":POW:MW:PRES " + state);
+        public string SetMWPreselectorPath(string state) => send(":POW:MW:PATH " + state);
+
+        public string SetInternalPreampState(string state) => send(":POW:GAIN " + state);
 
         public string SetMarkerMode(string mode) => send(":CALC:MARK1:MODE " + mode);
 

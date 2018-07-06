@@ -25,6 +25,7 @@ namespace Mixer {
         modeDSBUp,
         modeSSBDown,
         modeSSBUp,
+        modeSSBUpManual,
         modeMultiplier
     }
     
@@ -68,11 +69,12 @@ namespace Mixer {
         public MainWindow() {
             instrumentManager = new InstrumentManager(log);
             measureTaskDict = new Dictionary<MeasureMode, Action<IProgress<double>, DataTable, CancellationToken>> {
-                { MeasureMode.modeDSBDown,    (progress, table, token) => instrumentManager.measure_mix_DSB_down(progress, table, token) },
-                { MeasureMode.modeDSBUp,      (progress, table, token) => instrumentManager.measure_mix_DSB_up(progress, table, token) },
-                { MeasureMode.modeSSBDown,    (progress, table, token) => instrumentManager.measure_mix_SSB_down(progress, table, token) },
-                { MeasureMode.modeSSBUp,      (progress, table, token) => instrumentManager.measure_mix_SSB_up(progress, table, token) },
-                { MeasureMode.modeMultiplier, (progress, table, token) => instrumentManager.measure_mult(progress, table, token) }
+                { MeasureMode.modeDSBDown,     (progress, table, token) => instrumentManager.measure_mix_DSB_down(progress, table, token) },
+                { MeasureMode.modeDSBUp,       (progress, table, token) => instrumentManager.measure_mix_DSB_up(progress, table, token) },
+                { MeasureMode.modeSSBDown,     (progress, table, token) => instrumentManager.measure_mix_SSB_down(progress, table, token) },
+                { MeasureMode.modeSSBUp,       (progress, table, token) => instrumentManager.measure_mix_SSB_up(progress, table, token) },
+                { MeasureMode.modeSSBUpManual, (progress, table, token) => instrumentManager.measure_mix_SSB_up_manual(progress, table, token) },
+                { MeasureMode.modeMultiplier,  (progress, table, token) => instrumentManager.measure_mult(progress, table, token) }
             };
 
             InitializeComponent();
@@ -306,6 +308,11 @@ namespace Mixer {
         // calibration buttons
         private void btnCalibrateInClicked(object sender, RoutedEventArgs e) {
             // TODO: check for option input errors
+            if (mode == MeasureMode.modeSSBUpManual) {
+                log("Can't calibrate IN in SSB up manual mode.", false);
+                MessageBox.Show("Error: check log");
+                return;
+            }
             if (!canCalibrateIN_OUT()) {
                 MessageBox.Show("Error: check log");
                 return;
@@ -339,8 +346,8 @@ namespace Mixer {
             var progress = progressHandler as IProgress<double>;
             calibrationTokenSource = new CancellationTokenSource();
             CancellationToken token = calibrationTokenSource.Token;
-
-            calibrate(() => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode], mode, token), token, mode, "OUT");
+            calibrate(() => instrumentManager.calibrateOut(progress, dataTable, instrumentManager.outParameters[mode], mode, token),
+                        token, mode, "OUT");
         }
 
         private void btnCancelCalibrationClicked(object sender, RoutedEventArgs e) {

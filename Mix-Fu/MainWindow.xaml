@@ -69,6 +69,7 @@
             <ListBoxItem Content="DSB up mixer"/>
             <ListBoxItem Content="SSB down mixer"/>
             <ListBoxItem Content="SSB up mixer"/>
+            <ListBoxItem Content="SSB up mixer manual"/>
             <ListBoxItem Content="Multiplier x2"/>
         </ListBox>
         <ComboBox x:Name="comboLO" HorizontalAlignment="Left" VerticalAlignment="Top" Width="93" Height="32" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Padding="0" Margin="35,64,0,0" Grid.Column="2" Grid.Row="1" SelectionChanged="comboLO_SelectionChanged"/>
