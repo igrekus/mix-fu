@@ -343,7 +343,7 @@ namespace Mixer {
         }
 
         private bool instReleaseAkip(Akip3407 GEN) {
-//            aasdad
+            aasdad
             try {
                 GEN.SetOutput(Generator.OutputState.OutputOff);
             }
