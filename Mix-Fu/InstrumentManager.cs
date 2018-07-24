@@ -216,7 +216,10 @@ namespace Mixer {
                 string idn = testLocation(location, i); 
 //                string idn = "Agilent Technoligies,N9030A,MY49432146,A.11.04";
                 if (!string.IsNullOrEmpty(idn)) {
-                    string name = idn.Split(',')[1];
+                    string name = idn.Split(',')[1].Trim();
+                    if (!instrumentRegistry.ContainsKey(name)) {
+                        continue;
+                    }
                     listInstruments.Add(instrumentRegistry[name.Trim()](location, idn));
                     log("found " + idn + " at " + location, false);
                 }
@@ -343,7 +346,7 @@ namespace Mixer {
         }
 
         private bool instReleaseAkip(Akip3407 GEN) {
-            aasdad
+            
             try {
                 GEN.SetOutput(Generator.OutputState.OutputOff);
             }
@@ -628,6 +631,11 @@ namespace Mixer {
 
                     foreach (var p in parameters) {
                         string freq = row[p.Item1].ToString();
+                        string att_str = row[p.Item2].ToString();
+
+                        if (string.IsNullOrEmpty(freq) || freq == "-" || att_str == "-") {
+                            continue;
+                        }
 
                         if (!cache.ContainsKey(freq)) {
                             cache.Add(freq, getAttenuationError(GEN, SA, row[p.Item1].ToString(), tempPow, harmonic));
@@ -656,11 +664,11 @@ namespace Mixer {
 #region regMeasurement
 
         public void measurePower(DataRow row, IAnalyzer SA, decimal powGoal, decimal freq, string colAtt, string colPow, string colConv, int coeff, int db3) {
-            string attStr = row[colAtt].ToString().Replace(',', '.');
 
-            if (string.IsNullOrEmpty(attStr) || attStr == "-") {
-                log("error: measure: empty row, skipping: " + colPow + ": freq=" + freq + " powgoal=" + powGoal, true);
-                row[colPow] = "-";
+            string attStr = row[colAtt].ToString().Replace(',', '.');
+            string colPowStr = row[colPow].ToString();
+            if (string.IsNullOrEmpty(attStr) || attStr == "-" || colPowStr == "-") {
+                log("error: measure: row set to 'skip', skipping: " + colPow + ": freq=" + freq + " powgoal=" + powGoal, true);
                 row[colConv] = "-";
                 return;
             }
@@ -963,10 +971,15 @@ namespace Mixer {
                     continue;
                 }
 
-                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, -3);
-                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, -3);
-                measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqIF, "ATT-IF", "POUT-IF", "ISO-IF", 1, -3);
-                measurePower(row, (IAnalyzer)_sa, inPowLOGoal, inFreqLO, "ATT-LO", "POUT-LO", "ISO-LO", 1, 0);
+                try {
+                    measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqLSB, "ATT-LSB", "POUT-LSB", "CONV-LSB", -1, 3);
+                    measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqUSB, "ATT-USB", "POUT-USB", "CONV-USB", -1, 3);
+                    measurePower(row, (IAnalyzer)_sa, inPowIFGoal, inFreqIF,  "ATT-IF",  "POUT-IF",  "ISO-IF",   1,  3);
+                    measurePower(row, (IAnalyzer)_sa, inPowLOGoal, inFreqLO,  "ATT-LO",  "POUT-LO",  "ISO-LO",   1,  0);
+                }
+                catch (Exception ex) {
+                    log(">>>>>>>>>>>fukk" + ex.Message, false);
+                }
 
                 prog?.Report((double)i / data.Rows.Count * 100);
                 ++i;

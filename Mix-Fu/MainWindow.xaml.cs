@@ -364,8 +364,8 @@ namespace Mixer {
             }
 
             var progress            = progressHandler as IProgress<double>;
-            calibrationTokenSource  = new CancellationTokenSource();
-            CancellationToken token = calibrationTokenSource.Token;
+            measureTokenSource  = new CancellationTokenSource();
+            CancellationToken token = measureTokenSource.Token;
 
             measure(() => measureTaskDict[mode](progress, dataTable, token), token);
         }
