@@ -121,7 +121,7 @@ namespace Mixer {
                 { MeasureMode.modeDSBUp,      new ParameterStruct { colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL" } },
                 { MeasureMode.modeSSBDown,    new ParameterStruct { colFreq = "FUSB", colPow = "PUSB", colPowGoal = "PUSB-GOAL" } },
                 { MeasureMode.modeSSBUp,      new ParameterStruct { colFreq = "FIF", colPow = "PIF", colPowGoal = "PIF-GOAL" } },
-                { MeasureMode.modeMultiplier, new ParameterStruct { colFreq = "FH1", colPow = "PIN", colPowGoal = "PIN-GOAL" } }
+                { MeasureMode.modeMultiplier, new ParameterStruct { colFreq = "FH1", colPow = "PIN-GEN", colPowGoal = "PIN-GOAL" } }
             };
 
             // LO calibration parameters
@@ -565,11 +565,21 @@ namespace Mixer {
 
         // TODO: remove type conversions?
         public void calibrateIn(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
-            calibrate((IGenerator)_gen, (IAnalyzer)_sa, prog, data, paramDict, token);
+            try {
+                calibrate((IGenerator) _gen, (IAnalyzer) _sa, prog, data, paramDict, token);
+            }
+            catch (Exception ex) {
+                log(ex.Message, false);
+            }
         }
 
         public void calibrateLo(IProgress<double> prog, DataTable data, ParameterStruct paramDict, CancellationToken token) {
-            calibrate((IGenerator)_lo, (IAnalyzer)_sa, prog, data, paramDict, token);
+            try {
+                calibrate((IGenerator) _lo, (IAnalyzer) _sa, prog, data, paramDict, token);
+            }
+            catch (Exception ex) {
+                log(ex.Message, false);
+            }
         }
 
         private string getAttenuationError(IGenerator GEN, IAnalyzer SA, string freq, decimal powGoal, int harmonic = 1) {
