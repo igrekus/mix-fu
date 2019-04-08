@@ -83,9 +83,6 @@
     <SignManifests>false</SignManifests>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Ag34410_2_35">
-      <HintPath>C:\devtools\!dll\Ag34410_2_35.dll</HintPath>
-    </Reference>
     <Reference Include="Ag34410_2_35, Version=0.0.0.0, Culture=neutral, PublicKeyToken=344b812ea93ad2d2">
       <HintPath>C:\devtools\!dll\Ag34410_2_35.dll</HintPath>
     </Reference>
@@ -96,29 +93,17 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\devtools\!dll\Agilent.CommandExpert.DataModel.dll</HintPath>
     </Reference>
-    <Reference Include="Agilent.CommandExpert.InstrumentAbstraction, Version=1.7.153.0, Culture=neutral, PublicKeyToken=c5e9dbe29758600c, processorArchitecture=MSIL">
+    <Reference Include="Agilent.CommandExpert.InstrumentAbstraction, Version=1.8.194.0, Culture=neutral, PublicKeyToken=c5e9dbe29758600c, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>C:\devtools\!dll\Agilent.CommandExpert.InstrumentAbstraction.dll</HintPath>
     </Reference>
-    <Reference Include="Agilent.TMFramework.InternalUtils.WinForms, Version=2.0.10124.0, Culture=neutral, PublicKeyToken=7a01cdb2a9131f73, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\devtools\!dll\Agilent.TMFramework.InternalUtils.WinForms.dll</HintPath>
-    </Reference>
     <Reference Include="AgMXG_A_01_80">
       <HintPath>C:\devtools\!dll\AgMXG_A_01_80.dll</HintPath>
-    </Reference>
-    <Reference Include="Agilent.CommandExpert.InstrumentAbstraction, Version=1.7.153.0, Culture=neutral, PublicKeyToken=c5e9dbe29758600c, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\devtools\!dll\AgSCPI99_1_0.dll</HintPath>
     </Reference>
     <Reference Include="EnvDTE, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <SpecificVersion>False</SpecificVersion>
       <EmbedInteropTypes>True</EmbedInteropTypes>
       <HintPath>C:\devtools\!dll\EnvDTE.dll</HintPath>
-    </Reference>
-    <Reference Include="Agilent.CommandExpert.SequenceExecution, Version=1.7.153.0, Culture=neutral, PublicKeyToken=974178d81104e6cf, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files (x86)\Keysight\Command Expert\Agilent.CommandExpert.SequenceExecution.dll</HintPath>
     </Reference>
     <Reference Include="Agilent.TMFramework.InternalUtils.WinForms, Version=2.0.10124.0, Culture=neutral, PublicKeyToken=7a01cdb2a9131f73, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -127,11 +112,12 @@
     <Reference Include="AgSCPI99_1_0">
       <HintPath>..\..\dll\AgSCPI99_1_0.dll</HintPath>
     </Reference>
-    <Reference Include="EPPlus">
-      <HintPath>C:\devtools\!dll\EPPlus.dll</HintPath>
-    </Reference>
     <Reference Include="EPPlus, Version=4.0.4.0, Culture=neutral, PublicKeyToken=ea159fdaa78159a1">
       <HintPath>C:\devtools\!dll\EPPlus.dll</HintPath>
+    </Reference>
+    <Reference Include="Keysight.CommandExpert.InstrumentAbstraction, Version=1.8.194.0, Culture=neutral, PublicKeyToken=c5e9dbe29758600c, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>C:\devtools\!dll\Keysight.CommandExpert.InstrumentAbstraction.dll</HintPath>
     </Reference>
     <Reference Include="NationalInstruments.Common, Version=13.0.40.190, Culture=neutral, PublicKeyToken=dc6ad606294fc298, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -237,16 +223,6 @@
       <FileType>Assembly</FileType>
     </PublishFile>
     <PublishFile Include="Agilent.CommandExpert.DataModel">
-      <Visible>False</Visible>
-      <Group>
-      </Group>
-      <TargetPath>
-      </TargetPath>
-      <PublishState>Include</PublishState>
-      <IncludeHash>True</IncludeHash>
-      <FileType>Assembly</FileType>
-    </PublishFile>
-    <PublishFile Include="Agilent.CommandExpert.InstrumentAbstraction">
       <Visible>False</Visible>
       <Group>
       </Group>

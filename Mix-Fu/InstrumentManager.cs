@@ -643,15 +643,17 @@ namespace Mixer {
                         string freq = row[p.Item1].ToString();
                         string att_str = row[p.Item2].ToString();
 
+                        var cache_key = $"{freq}|{harmonic}";
+
                         if (string.IsNullOrEmpty(freq) || freq == "-" || att_str == "-") {
                             continue;
                         }
 
-                        if (!cache.ContainsKey(freq)) {
-                            cache.Add(freq, getAttenuationError(GEN, SA, row[p.Item1].ToString(), tempPow, harmonic));
+                        if (!cache.ContainsKey(cache_key)) {
+                            cache.Add(cache_key, getAttenuationError(GEN, SA, row[p.Item1].ToString(), tempPow, harmonic));
                         }
 
-                        row[p.Item2] = cache[freq];
+                        row[p.Item2] = cache[cache_key];
 
                         if (mode == MeasureMode.modeMultiplier)
                             ++harmonic;
