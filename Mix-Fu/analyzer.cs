@@ -62,10 +62,12 @@ namespace Mixer
 
         public string SetFreqSpan(decimal span) => send(":SENS:FREQ:SPAN " + span);
 
-//        public string SetMWPreselectorPath(string state) => send(":POW:MW:PRES " + state);
-        public string SetMWPreselectorPath(string state) => send(":POW:MW:PATH " + state);
+        //        public string SetMWPreselectorPath(string state) => send(":POW:MW:PRES " + state);
+        //        public string SetMWPreselectorPath(string state) => send(":POW:MW:PATH " + state);
+        public string SetMWPreselectorPath(string state) => "ok";
 
-        public string SetInternalPreampState(string state) => send(":POW:GAIN " + state);
+        //        public string SetInternalPreampState(string state) => send(":POW:GAIN " + state);
+        public string SetInternalPreampState(string state) => "ok";
 
         public string SetMarkerMode(string mode) => send(":CALC:MARK1:MODE " + mode);
 
