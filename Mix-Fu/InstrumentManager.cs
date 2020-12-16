@@ -72,19 +72,25 @@ namespace Mixer {
         // instrument class registry
         private Dictionary<string, Func<string, string, Instrument>> instrumentRegistry =
 #if mock
-            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A", (loc, idn)    => new AnalyzerMock(loc, idn) } ,
-                                                                       { "E4438C", (loc, idn)    => new GeneratorMock(loc, idn) },
-                                                                       { "N5181B", (loc, idn)    => new GeneratorMock(loc, idn) },
-                                                                       { "N5183A", (loc, idn)    => new GeneratorMock(loc, idn) },
-                                                                       { "HMC-T2100", (loc, idn) => new GeneratorMock(loc, idn) },
-                                                                       { "AKIP", (loc, idn)      => new Akip3407Mock(loc, idn) } };
+            new Dictionary<string, Func<string, string, Instrument>> {
+                {"N9030A", (loc, idn) => new AnalyzerMock(loc, idn)},
+                {"E4446A", (loc, idn) => new AnalyzerMock(loc, idn)},
+                {"E4438C", (loc, idn) => new GeneratorMock(loc, idn)},
+                {"N5181B", (loc, idn) => new GeneratorMock(loc, idn)},
+                {"N5183A", (loc, idn) => new GeneratorMock(loc, idn)},
+                {"HMC-T2100", (loc, idn) => new GeneratorMock(loc, idn)},
+                {"AKIP", (loc, idn) => new Akip3407Mock(loc, idn)}
+            };
 #else
-            new Dictionary<string, Func<string, string, Instrument>> { { "N9030A",    (loc, idn) => new Analyzer (loc, idn) },
-                                                                       { "E4438C",    (loc, idn) => new Generator(loc, idn) },
-                                                                       { "N5181B",    (loc, idn) => new Generator(loc, idn) },
-                                                                       { "N5183A",    (loc, idn) => new Generator(loc, idn) },
-                                                                       { "HMC-T2100", (loc, idn) => new HMCT2100(loc, idn) },
-                                                                       { "AKIP",      (loc, idn) => new Akip3407 (loc, idn) } };
+            new Dictionary<string, Func<string, string, Instrument>> {
+                { "N9030A",    (loc, idn) => new Analyzer (loc, idn) },
+                { "E4446A",    (loc, idn) => new Analyzer (loc, idn) },
+                { "E4438C",    (loc, idn) => new Generator(loc, idn) },
+                { "N5181B",    (loc, idn) => new Generator(loc, idn) },
+                { "N5183A",    (loc, idn) => new Generator(loc, idn) },
+                { "HMC-T2100", (loc, idn) => new HMCT2100(loc, idn) },
+                { "AKIP",      (loc, idn) => new Akip3407 (loc, idn) }
+            };
 #endif
 
         // instrument list
