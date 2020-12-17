@@ -105,7 +105,7 @@ namespace Mixer {
         public IInstrument _sa { get; set; }
         public IInstrument _lo { get; set; }
 
-        public int delay { get; set; } = 300;
+        public int delay { get; set; } = 500;
         public decimal attenuation { get; set; } = 30;
         public decimal maxfreq { get; set; } = 26500*(decimal)Constants.MHz;
         public decimal span { get; set; } = 10*(decimal)Constants.MHz;
