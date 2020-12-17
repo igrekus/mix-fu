@@ -545,7 +545,8 @@ namespace Mixer {
 
                     int count = 0;
                     int tmpDelay = delay;
-                    while (count < 5 && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
+                    var maxRepeats = 20;
+                    while (count < maxRepeats && Math.Abs(err) > (decimal)0.05 && Math.Abs(err) < 10) {
                         if (!instSetGenPow(GEN, tempPowDec))
                             break;
 
