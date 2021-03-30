@@ -45,6 +45,7 @@ namespace Mixer {
         string SetMeasCenterFreq(decimal freq);
         string SetMarker1XCenter(decimal freq);
         string ReadMarker1Y();
+        string FindPeakAndReadMarker1Y();
     }
 
     abstract class Instrument : IInstrument {
@@ -462,7 +463,8 @@ namespace Mixer {
             // this function should always return correct decimal number, error handling is not necessary
             string readpow;
             try {
-                readpow = SA.ReadMarker1Y();
+                // readpow = SA.ReadMarker1Y();
+                readpow = SA.FindPeakAndReadMarker1Y();
             }
             catch (Exception ex) {
                 log("error: can't read power: " + ex.Message, false);

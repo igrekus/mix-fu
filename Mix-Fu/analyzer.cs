@@ -78,5 +78,11 @@ namespace Mixer
         public string SetMarker1XCenter(decimal freq) => send(":CALCulate:MARKer1:X:CENTer " + freq);
 
         public string ReadMarker1Y() => query(":CALCulate:MARKer:Y?");
+
+        public string FindPeakAndReadMarker1Y() {
+            send("CALC:MARK1:MAX");
+            System.Threading.Thread.Sleep(500);
+            return query(":CALC:MARK1:Y?");
+        }
     }
 }
