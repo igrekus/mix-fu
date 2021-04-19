@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Agilent.CommandExpert.ScpiNet.AgSCPI99_1_0;
 
 namespace Mixer
@@ -73,7 +73,7 @@ namespace Mixer
 
         public string SetPowerAttenuation(decimal att) => send(":POW:ATT " + att);
 
-        public string SetMeasCenterFreq(decimal freq) => send(":SENSe:FREQuency:RF:CENTer " + freq);
+        public string SetMeasCenterFreq(decimal freq) => send(":SENSe:FREQuency:CENTer " + freq);
 
         public string SetMarker1XCenter(decimal freq) => send(":CALCulate:MARKer1:X:CENTer " + freq);
 
